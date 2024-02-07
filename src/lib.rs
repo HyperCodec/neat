@@ -6,10 +6,11 @@ pub struct NeuralNetworkTopology {
     input_layer: Vec<NeuronTopology>,
     hidden_layer: Vec<NeuronTopology>,
     output_layer: Vec<NeuronTopology>,
+    pub mutation_rate: f32,
 }
 
 impl NeuralNetworkTopology {
-    pub fn new(inputs: usize, outputs: usize, rng: &mut impl Rng) -> Self {
+    pub fn new(inputs: usize, outputs: usize, mutation_rate: f32, rng: &mut impl Rng) -> Self {
         let mut input_layer = Vec::with_capacity(inputs);
 
         for _ in 0..inputs {
@@ -17,23 +18,55 @@ impl NeuralNetworkTopology {
         }
 
         let mut output_layer = Vec::with_capacity(outputs);
-        let input_vec: Vec<_> = input_layer
+        let input_locs: Vec<_> = input_layer
             .iter()
             .enumerate()
             .map(|(i, _n)| NeuronLocation::Input(i))
             .collect();
 
         for _ in 0..outputs {
-            output_layer.push(NeuronTopology::new(input_vec.clone(), rng));
+            let mut already_chosen = Vec::new();
+
+            // random number of connections to random input neurons.
+            let input = (0..rng.gen_range(0..inputs))
+                .map(|_| {
+                    let mut i = rng.gen_range(0..inputs);
+                    while already_chosen.contains(&i) {
+                        i = rng.gen_range(0..inputs);
+                    }
+
+                    input_locs[i]
+                })
+                .collect();
+
+            output_layer.push(NeuronTopology::new(input, rng));
         }
 
         Self {
             input_layer,
             hidden_layer: vec![],
             output_layer,
+            mutation_rate,
         }
     }
 }
+
+impl RandomlyMutable for NeuralNetworkTopology {
+    fn mutate(&mut self, rate: f32, rng: &mut impl rand::Rng) {
+        todo!();
+    }
+}
+
+#[cfg(not(feature = "crossover"))]
+impl DivisionReproduction for NeuralNetworkTopology {
+    fn spawn_child(&self, rng: &mut impl rand::Rng) -> Self {
+        let mut child = self.clone();
+        child.mutate(self.mutation_rate, rng);
+        child        
+    }
+}
+
+impl Prunable for NeuralNetworkTopology {}
 
 #[derive(Debug, Clone)]
 pub struct NeuronTopology {
