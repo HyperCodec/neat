@@ -35,6 +35,8 @@ impl NeuralNetworkTopology {
                         i = rng.gen_range(0..inputs);
                     }
 
+                    already_chosen.push(i);
+
                     input_locs[i]
                 })
                 .collect();
