@@ -1,0 +1,29 @@
+name: CI-CD
+
+on: [push, pull_request]
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+        environment: testing
+        name: Unit Testing
+        steps:
+            - uses: actions/checkout@v4
+            - name: Run cargo test
+              run: cargo test --verbose --features crossover
+
+    clippy:
+        runs-on: ubuntu-latest
+        name: Clippy Linting Checks
+        steps:
+            - uses: actions/checkout@v4
+            - name: Run Clippy
+              run: cargo clippy --all-features -- -D warnings
+    
+    fmt:
+        runs-on: ubuntu-latest
+        name: Formatting Checks
+        steps:
+            - uses: actions/checkout@v4
+            - name: Run cargo fmt
+              run: cargo fmt --check
