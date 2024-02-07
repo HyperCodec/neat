@@ -4,7 +4,7 @@ use rand::prelude::*;
 #[derive(Debug, Clone)]
 pub struct NeuralNetworkTopology {
     pub input_layer: Vec<NeuronTopology>,
-    pub hidden_layer: Vec<NeuronTopology>,
+    pub hidden_layers: Vec<NeuronTopology>,
     pub output_layer: Vec<NeuronTopology>,
     pub mutation_rate: f32,
 }
@@ -46,7 +46,7 @@ impl NeuralNetworkTopology {
 
         Self {
             input_layer,
-            hidden_layer: vec![],
+            hidden_layers: vec![],
             output_layer,
             mutation_rate,
         }
@@ -59,7 +59,6 @@ impl RandomlyMutable for NeuralNetworkTopology {
     }
 }
 
-#[cfg(not(feature = "crossover"))]
 impl DivisionReproduction for NeuralNetworkTopology {
     fn spawn_child(&self, rng: &mut impl rand::Rng) -> Self {
         let mut child = self.clone();
@@ -68,12 +67,19 @@ impl DivisionReproduction for NeuralNetworkTopology {
     }
 }
 
+#[cfg(feature = "crossover")]
+impl CrossoverReproduction for NeuralNetworkTopology {
+    fn spawn_child(&self, other: &Self, rng: &mut impl Rng) -> Self {
+        todo!();
+    }
+}
+
 impl Prunable for NeuralNetworkTopology {}
 
 #[derive(Debug, Clone)]
 pub struct NeuronTopology {
-    inputs: Vec<(NeuronLocation, f32)>,
-    bias: f32,
+    pub inputs: Vec<(NeuronLocation, f32)>,
+    pub bias: f32,
 }
 
 impl NeuronTopology {
