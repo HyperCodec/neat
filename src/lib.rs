@@ -1,14 +1,102 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
+pub use genetic_rs::prelude::*;
+use rand::prelude::*;
+
+#[derive(Debug, Clone)]
+pub struct NeuralNetworkTopology {
+    input_layer: Vec<NeuronTopology>,
+    hidden_layer: Vec<NeuronTopology>,
+    output_layer: Vec<NeuronTopology>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+impl NeuralNetworkTopology {
+    pub fn new(inputs: usize, outputs: usize, rng: &mut impl Rng) -> Self {
+        let mut input_layer = Vec::with_capacity(inputs);
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+        for _ in 0..inputs {
+            input_layer.push(NeuronTopology::new(vec![], rng));
+        }
+
+        let mut output_layer = Vec::with_capacity(outputs);
+        let input_vec: Vec<_> = input_layer
+            .iter()
+            .enumerate()
+            .map(|(i, _n)| NeuronLocation::Input(i))
+            .collect();
+
+        for _ in 0..outputs {
+            output_layer.push(NeuronTopology::new(input_vec.clone(), rng));
+        }
+
+        Self {
+            input_layer,
+            hidden_layer: vec![],
+            output_layer,
+        }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct NeuronTopology {
+    inputs: Vec<(NeuronLocation, f32)>,
+    bias: f32,
+}
+
+impl NeuronTopology {
+    pub fn new(inputs: Vec<NeuronLocation>, rng: &mut impl Rng) -> Self {
+        let inputs = inputs
+            .into_iter()
+            .map(|i| (i, rng.gen::<f32>()))
+            .collect();
+
+        Self {
+            inputs,
+            bias: rng.gen(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NeuronLocation {
+    Input(usize),
+    Hidden(usize),
+    Output(usize),
+}
+
+impl NeuronLocation {
+    pub fn is_input(&self) -> bool {
+        match self {
+            Self::Input(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_hidden(&self) -> bool {
+        match self {
+            Self::Hidden(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_output(&self) -> bool {
+        match self {
+            Self::Output(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn unwrap(&self) -> usize {
+        match self {
+            Self::Input(i) => *i,
+            Self::Hidden(i) => *i,
+            Self::Output(i) => *i,
+        }
+    }
+}
+
+pub struct NeuralNetwork {
+
+}
+
+pub struct Neuron {
+
 }

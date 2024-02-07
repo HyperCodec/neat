@@ -11,8 +11,10 @@ homepage = "https://github.com/inflectrix/neat"
 [features]
 default = []
 crossover = ["genetic-rs/crossover"]
-rayon = ["genetic-rs/rayon"]
+rayon = ["genetic-rs/rayon", "dep:rayon"]
 
 
 [dependencies]
 genetic-rs = "0.2.1"
+rand = "0.8.5"
+rayon = { version = "1.8.1", optional = true }
