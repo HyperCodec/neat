@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "rayon")] use rayon::prelude::*;
 
+#[derive(Debug)]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
     input_layer: [Arc<RwLock<Neuron>>; I],
     hidden_layers: Vec<Arc<RwLock<Neuron>>>,
@@ -22,6 +23,58 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
+        let n = self.get_neuron(loc);
+
+        {
+            let nr = n.read().unwrap();
+
+            if nr.state.processed {
+                return nr.state.value;
+            }
+        }
+
+        let mut n = n.try_write().unwrap();
+
+        for (l, w) in n.inputs.clone() {
+            n.state.value += self.process_neuron(l) * w;
+        }
+
+        n.sigmoid();
+
+        n.state.value
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
+        println!("processing");
+        let n = self.get_neuron(loc);
+
+        {
+            let nr = n.read().unwrap();
+
+            if nr.state.processed {
+                return nr.state.value;
+            }
+        }
+
+        n.read().unwrap().inputs
+            .clone()
+            .into_par_iter()
+            .for_each(|(n2, w)| {
+                let processed = self.process_neuron(n2); // separate step so write lock doesnt block process_neuron on other threads
+                println!("processed a neuron");
+                n.write().unwrap().state.value += processed * w // causing a hang smh?
+            });
+
+        println!("processed whole thing");
+        n.write().unwrap().sigmoid();
+
+        let nr = n.read().unwrap();
+        nr.state.value
     }
 
     #[cfg(feature = "rayon")]
@@ -70,56 +123,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         
         self.output_layer.par_iter().for_each(|n| n.write().unwrap().flush_state());
     }
-
-    #[cfg(not(feature = "rayon"))]
-    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
-        let n = self.get_neuron(loc);
-
-        {
-            let nr = n.read().unwrap();
-
-            if nr.state.processed {
-                return nr.state.value;
-            }
-        }
-
-        let mut n = n.try_write().unwrap();
-
-        for (l, w) in n.inputs.clone() {
-            n.state.value += self.process_neuron(l) * w;
-        }
-
-        n.write().unwrap().sigmoid();
-
-        n.state.value
-    }
-
-    #[cfg(feature = "rayon")]
-    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
-        let n = self.get_neuron(loc);
-
-        {
-            let nr = n.read().unwrap();
-
-            if nr.state.processed {
-                return nr.state.value;
-            }
-        }
-
-        n.read().unwrap().inputs
-            .clone()
-            .into_par_iter()
-            .for_each(|(n2, w)| {
-                let processed = self.process_neuron(n2); // separate step so write lock doesnt block process_neuron on other threads
-                n.write().unwrap().state.value += processed * w
-            });
-
-        n.write().unwrap().sigmoid();
-
-        let nr = n.read().unwrap();
-        nr.state.value
-    }
-
 }
 
 impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NeuralNetwork<I, O> {

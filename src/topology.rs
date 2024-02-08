@@ -3,17 +3,17 @@ use std::sync::{Arc, RwLock};
 use genetic_rs::prelude::*;
 use rand::prelude::*;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NeuralNetworkTopology<const I: usize, const O: usize> {
     pub input_layer: [Arc<RwLock<NeuronTopology>>; I],
     pub hidden_layers: Vec<Arc<RwLock<NeuronTopology>>>,
     pub output_layer: [Arc<RwLock<NeuronTopology>>; O],
     pub mutation_rate: f32,
-    pub mutation_iter: usize,
+    pub mutation_passes: usize,
 }
 
 impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
-    pub fn new(mutation_rate: f32, mutation_iter: usize, rng: &mut impl Rng) -> Self {
+    pub fn new(mutation_rate: f32, mutation_passes: usize, rng: &mut impl Rng) -> Self {
         let input_layer: [Arc<RwLock<NeuronTopology>>; I] = (0..I)
             .map(|_| Arc::new(RwLock::new(NeuronTopology::new(vec![], rng))))
             .collect::<Vec<_>>()
@@ -21,18 +21,12 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
             .unwrap();
 
         let mut output_layer = Vec::with_capacity(O);
-        let input_locs: Vec<_> = input_layer
-            .iter()
-            .enumerate()
-            .map(|(i, _n)| NeuronLocation::Input(i))
-            .collect();
 
         for _ in 0..O {
-            let mut already_chosen = Vec::new();
-
             // random number of connections to random input neurons.
-            let input = (0..rng.gen_range(0..I))
+            let input = (0..rng.gen_range(1..=I))
                 .map(|_| {
+                    let mut already_chosen = Vec::new();
                     let mut i = rng.gen_range(0..I);
                     while already_chosen.contains(&i) {
                         i = rng.gen_range(0..I);
@@ -40,7 +34,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
 
                     already_chosen.push(i);
 
-                    input_locs[i]
+                    NeuronLocation::Input(i)
                 })
                 .collect();
 
@@ -54,7 +48,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
             hidden_layers: vec![],
             output_layer,
             mutation_rate,
-            mutation_iter,
+            mutation_passes,
         }
     }
 
@@ -87,6 +81,10 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 (self.input_layer[i].clone(), NeuronLocation::Input(i))
             },
             1 => {
+                if self.hidden_layers.len() == 0 {
+                    return self.rand_neuron(rng);
+                }
+
                 let i = rng.gen_range(0..self.hidden_layers.len());
                 (self.hidden_layers[i].clone(), NeuronLocation::Hidden(i))
             },
@@ -98,9 +96,41 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
     }
 }
 
+// need to do all this manually because Arcs are cringe
+impl<const I: usize, const O: usize> Clone for NeuralNetworkTopology<I, O> {
+    fn clone(&self) -> Self {
+        let input_layer = self.input_layer
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let hidden_layers = self.hidden_layers
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect();
+
+        let output_layer = self.output_layer
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        Self {
+            input_layer,
+            hidden_layers,
+            output_layer,
+            mutation_rate: self.mutation_rate,
+            mutation_passes: self.mutation_passes,
+        }
+    }
+}
+
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl rand::Rng) {
-        for _ in 0..self.mutation_iter {
+        for _ in 0..self.mutation_passes {
             if rng.gen::<f32>() <= rate { 
                 // split preexisting connection
                 let (mut n2, _) = self.rand_neuron(rng);
@@ -109,12 +139,12 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                     (n2, _) = self.rand_neuron(rng);
                 }
     
-                let mut n2: std::sync::RwLockWriteGuard<'_, NeuronTopology> = n2.write().unwrap();
+                let mut n2 = n2.write().unwrap();
                 let i = rng.gen_range(0..n2.inputs.len());
                 let (loc, w) = n2.inputs.remove(i);
     
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
-                self.hidden_layers.push(Arc::new(RwLock::new(NeuronTopology::new(vec![loc], rng))));
+                self.hidden_layers.push(Arc::new(RwLock::new(NeuronTopology::new(vec![loc], rng)))); // for some reason, this isn't actually doing anything once it goes to the next scope
     
                 n2.inputs.insert(i, (loc3, w));
             }

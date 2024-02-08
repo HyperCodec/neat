@@ -1,8 +1,9 @@
 use neat::*;
 use rand::prelude::*;
 
+#[derive(Clone, Debug)]
 struct AgentDNA {
-    network: NeuralNetworkTopology, 
+    network: NeuralNetworkTopology<2, 4>,
 }
 
 impl RandomlyMutable for AgentDNA {
@@ -15,22 +16,23 @@ impl Prunable for AgentDNA {}
 
 impl DivisionReproduction for AgentDNA {
     fn spawn_child(&self, rng: &mut impl Rng) -> Self {
-        Self {
-            network: self.network.spawn_child(rng),
-        }
+        let mut child = self.clone();
+        child.mutate(self.network.mutation_rate, rng);
+        child
     }
 }
 
 impl GenerateRandom for AgentDNA {
     fn gen_random(rng: &mut impl rand::Rng) -> Self {
         Self {
-            network: NeuralNetworkTopology::new(2, 4, 0.01, rng),
+            network: NeuralNetworkTopology::new(0.01, 3, rng),
         }
     }
 }
 
+#[derive(Debug)]
 struct Agent {
-    network: NeuralNetwork,
+    network: NeuralNetwork<2, 4>,
 }
 
 impl From<&AgentDNA> for Agent {
@@ -43,9 +45,10 @@ impl From<&AgentDNA> for Agent {
 
 fn fitness(dna: &AgentDNA) -> f32 {
     let agent = Agent::from(dna);
+
     let mut fitness = 0.;
     let mut rng = rand::thread_rng();
-
+    
     for _ in 0..10 {
         // 10 games
 
@@ -61,7 +64,7 @@ fn fitness(dna: &AgentDNA) -> f32 {
 
         loop {
             // perform actions in game
-            let action = agent.network.predict(vec![(food_pos.0 - agent_pos.0) as f32, (food_pos.1 - agent_pos.1) as f32]);
+            let action = agent.network.predict([(food_pos.0 - agent_pos.0) as f32, (food_pos.1 - agent_pos.1) as f32]);
             let action = action.iter().max_index();
 
             match action {
@@ -88,12 +91,49 @@ fn fitness(dna: &AgentDNA) -> f32 {
         }
     }
 
-
     fitness
 }
 
+#[cfg(not(feature = "rayon"))]
 fn main() {
     let mut rng = rand::thread_rng();
 
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(&mut rng, 100),
+        fitness,
+        division_pruning_nextgen,
+    );
 
+    for _ in 0..100 {
+        sim.next_generation();
+    }
+
+    let maxfit = sim.entities
+        .iter()
+        .map(fitness)
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    dbg!(maxfit);
+}
+
+#[cfg(feature = "rayon")]
+fn main() {
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(100),
+        fitness,
+        division_pruning_nextgen,
+    );
+
+    for _ in 0..100 {
+        sim.next_generation();
+    }
+
+    let maxfit = sim.entities
+        .iter()
+        .map(fitness)
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    dbg!(maxfit);
 }
