@@ -1,11 +1,13 @@
+use std::sync::{Arc, RwLock};
+
 use genetic_rs::prelude::*;
 use rand::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct NeuralNetworkTopology {
-    pub input_layer: Vec<NeuronTopology>,
-    pub hidden_layers: Vec<NeuronTopology>,
-    pub output_layer: Vec<NeuronTopology>,
+    pub input_layer: Vec<Arc<RwLock<NeuronTopology>>>,
+    pub hidden_layers: Vec<Arc<RwLock<NeuronTopology>>>,
+    pub output_layer: Vec<Arc<RwLock<NeuronTopology>>>,
     pub mutation_rate: f32,
 }
 
@@ -14,7 +16,7 @@ impl NeuralNetworkTopology {
         let mut input_layer = Vec::with_capacity(inputs);
 
         for _ in 0..inputs {
-            input_layer.push(NeuronTopology::new(vec![], rng));
+            input_layer.push(Arc::new(RwLock::new(NeuronTopology::new(vec![], rng))));
         }
 
         let mut output_layer = Vec::with_capacity(outputs);
@@ -41,7 +43,7 @@ impl NeuralNetworkTopology {
                 })
                 .collect();
 
-            output_layer.push(NeuronTopology::new(input, rng));
+            output_layer.push(Arc::new(RwLock::new(NeuronTopology::new(input, rng))));
         }
 
         Self {
@@ -51,11 +53,97 @@ impl NeuralNetworkTopology {
             mutation_rate,
         }
     }
+
+    fn is_connection_cyclic(&self, loc1: NeuronLocation, loc2: NeuronLocation) -> bool {
+        if loc1 == loc2 {
+            return true;
+        }
+
+        for &(n, _w) in &self.get_neuron(loc2).read().unwrap().inputs {
+            if self.is_connection_cyclic(n, loc2) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    pub fn get_neuron(&self, loc: NeuronLocation) -> Arc<RwLock<NeuronTopology>> {
+        match loc {
+            NeuronLocation::Input(i) => self.input_layer[i].clone(),
+            NeuronLocation::Hidden(i) => self.hidden_layers[i].clone(),
+            NeuronLocation::Output(i) => self.output_layer[i].clone(),
+        }
+    }
+
+    pub fn rand_neuron(&self, rng: &mut impl Rng) -> (Arc<RwLock<NeuronTopology>>, NeuronLocation) {
+        match rng.gen_range(0..3) {
+            0 => {
+                let i = rng.gen_range(0..self.input_layer.len());
+                (self.input_layer[i].clone(), NeuronLocation::Input(i))
+            },
+            1 => {
+                let i = rng.gen_range(0..self.hidden_layers.len());
+                (self.hidden_layers[i].clone(), NeuronLocation::Hidden(i))
+            },
+            _ => {
+                let i = rng.gen_range(0..self.output_layer.len());
+                (self.output_layer[i].clone(), NeuronLocation::Output(i))
+            }
+        }
+    }
 }
 
 impl RandomlyMutable for NeuralNetworkTopology {
     fn mutate(&mut self, rate: f32, rng: &mut impl rand::Rng) {
-        todo!();
+       if rng.gen::<f32>() <= rate { 
+            // split preexisting connection
+            let (mut n2, _) = self.rand_neuron(rng);
+                    
+            while n2.read().unwrap().inputs.len() == 0 {
+                (n2, _) = self.rand_neuron(rng);
+            }
+
+            let mut n2: std::sync::RwLockWriteGuard<'_, NeuronTopology> = n2.write().unwrap();
+            let i = rng.gen_range(0..n2.inputs.len());
+            let (loc, w) = n2.inputs.remove(i);
+
+            let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
+            self.hidden_layers.push(Arc::new(RwLock::new(NeuronTopology::new(vec![loc], rng))));
+
+            n2.inputs.insert(i, (loc3, w));
+       }
+
+        if rng.gen::<f32>() <= rate {
+            // add a connection
+            let (mut n1, mut loc1) = self.rand_neuron(rng);
+
+            while n1.read().unwrap().inputs.len() == 0 {
+                (n1, loc1) = self.rand_neuron(rng);
+            }
+
+            let (mut n2, mut loc2) = self.rand_neuron(rng);
+
+            while self.is_connection_cyclic(loc1, loc2) {
+                (n2, loc2) = self.rand_neuron(rng);
+            }
+
+            n2.write().unwrap().inputs.push((loc1, rng.gen()));
+        }
+
+        if rng.gen::<f32>() <= rate {
+            // mutate a connection
+            let (mut n, _) = self.rand_neuron(rng);
+
+            while n.read().unwrap().inputs.len() == 0 {
+                (n, _) = self.rand_neuron(rng);
+            }
+
+            let mut n = n.write().unwrap();
+            let i = rng.gen_range(0..n.inputs.len());
+            let (_, w) = &mut n.inputs[i];
+            *w += rng.gen::<f32>() * rate; 
+       }
     }
 }
 

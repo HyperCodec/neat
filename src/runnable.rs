@@ -45,7 +45,7 @@ impl NeuralNetwork {
         }
     }
 
-    fn process_neuron(&mut self, loc: NeuronLocation) -> f32 {
+    pub fn process_neuron(&mut self, loc: NeuronLocation) -> f32 {
         let n = self.get_neuron(loc);
 
         {
@@ -56,7 +56,7 @@ impl NeuralNetwork {
             }
         }
 
-        let mut n = n.try_write().unwrap();
+        let mut n = n.write().unwrap();
 
         for (l, w) in n.inputs.clone() {
             n.state.value += self.process_neuron(l) * w;
@@ -71,23 +71,17 @@ impl From<&NeuralNetworkTopology> for NeuralNetwork {
     fn from(value: &NeuralNetworkTopology) -> Self {
         let input_layer = value.input_layer
             .iter()
-            .map(Neuron::from)
-            .map(RwLock::from)
-            .map(Arc::from)
+            .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect();
 
         let hidden_layers = value.hidden_layers
             .iter()
-            .map(Neuron::from)
-            .map(RwLock::from)
-            .map(Arc::from)
+            .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect();
 
         let output_layer = value.output_layer
             .iter()
-            .map(Neuron::from)
-            .map(RwLock::from)
-            .map(Arc::from)
+            .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect();
 
         Self {
@@ -108,6 +102,10 @@ pub struct Neuron {
 impl Neuron {
     pub fn flush_state(&mut self) {
         self.state.value = self.bias;
+    }
+
+    pub fn sigmoid(&mut self) {
+        self.state.value = 1. / (1. + std::f32::consts::E.powf(-self.state.value))
     }
 }
 

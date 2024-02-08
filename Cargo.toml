@@ -10,7 +10,7 @@ homepage = "https://github.com/inflectrix/neat"
 
 [features]
 default = []
-crossover = ["genetic-rs/crossover"]
+#crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
 
 
