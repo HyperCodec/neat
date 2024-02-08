@@ -3,44 +3,40 @@ use std::sync::{Arc, RwLock};
 
 #[cfg(feature = "rayon")] use rayon::prelude::*;
 
-pub struct NeuralNetwork {
-    input_layer: Vec<Arc<RwLock<Neuron>>>,
+pub struct NeuralNetwork<const I: usize, const O: usize> {
+    input_layer: [Arc<RwLock<Neuron>>; I],
     hidden_layers: Vec<Arc<RwLock<Neuron>>>,
-    output_layer: Vec<Arc<RwLock<Neuron>>>,
+    output_layer: [Arc<RwLock<Neuron>>; O],
 }
 
-impl NeuralNetwork {
+impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     #[cfg(not(feature = "rayon"))]
-    pub fn predict(&self, inputs: Vec<f32>) -> Vec<f32> {
-        if self.input_layer.len() != inputs.len() {
-            panic!("Invalid input layer specified. Expected {}, got {}", self.input_layer.len(), inputs.len());
-        }
-
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         for (i, v) in inputs.iter().enumerate() {
             self.input_layer[i].write().unwrap().state.value = *v;
         }
 
-        (0..self.output_layer.len())
+        (0..O)
             .map(|i| NeuronLocation::Output(i))
             .map(|loc| self.process_neuron(loc))
-            .collect()
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
     }
 
     #[cfg(feature = "rayon")]
-    pub fn predict(&self, inputs: Vec<f32>) -> Vec<f32> {
-        if self.input_layer.len() != inputs.len() {
-            panic!("Invalid input layer specified. Expected {}, got {}", self.input_layer.len(), inputs.len());
-        }
-
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         inputs.par_iter().enumerate().for_each(|(i, v)| {
             self.input_layer[i].write().unwrap().state.value = *v;
         });
 
-        (0..self.output_layer.len())
+        (0..O)
             .into_par_iter()
             .map(|i| NeuronLocation::Output(i))
             .map(|loc| self.process_neuron(loc))
-            .collect()
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
     }
 
     pub fn get_neuron(&self, loc: NeuronLocation) -> Arc<RwLock<Neuron>> {
@@ -126,12 +122,14 @@ impl NeuralNetwork {
 
 }
 
-impl From<&NeuralNetworkTopology> for NeuralNetwork {
-    fn from(value: &NeuralNetworkTopology) -> Self {
+impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NeuralNetwork<I, O> {
+    fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
         let input_layer = value.input_layer
             .iter()
             .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
-            .collect();
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         let hidden_layers = value.hidden_layers
             .iter()
@@ -141,7 +139,9 @@ impl From<&NeuralNetworkTopology> for NeuralNetwork {
         let output_layer = value.output_layer
             .iter()
             .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
-            .collect();
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         Self {
             input_layer,
