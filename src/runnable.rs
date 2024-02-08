@@ -186,3 +186,18 @@ pub struct NeuronState {
     pub value: f32,
     pub processed: bool,
 }
+
+pub trait MaxIndex<T: PartialOrd> {
+    fn max_index(self) -> usize;
+}
+
+impl<I: Iterator<Item = T>, T: PartialOrd> MaxIndex<T> for I {
+    // slow and lazy implementation but it works (will prob optimize in the future)
+    fn max_index(self) -> usize {
+        self
+            .enumerate()
+            .max_by(|(_, v), (_, v2)| v.partial_cmp(v2).unwrap())
+            .unwrap()
+            .0
+    }
+}

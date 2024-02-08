@@ -162,8 +162,6 @@ impl CrossoverReproduction for NeuralNetworkTopology {
     }
 }
 
-impl Prunable for NeuralNetworkTopology {}
-
 #[derive(Debug, Clone)]
 pub struct NeuronTopology {
     pub inputs: Vec<(NeuronLocation, f32)>,
