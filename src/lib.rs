@@ -4,7 +4,7 @@
 //! - [x] rayon
 //! - [ ] crossover
 //!
-//! You can get started by
+//! You can get started by looking at [genetic-rs docs](https://docs.rs/genetic-rs) and checking the examples for this crate.
 
 #![warn(missing_docs)]
 
