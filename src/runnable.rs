@@ -14,11 +14,31 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     #[cfg(not(feature = "rayon"))]
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         for (i, v) in inputs.iter().enumerate() {
-            self.input_layer[i].write().unwrap().state.value = *v;
+            let mut nw = self.input_layer[i].write().unwrap();
+            nw.state.value = *v;
+            nw.state.processed = true;
         }
 
         (0..O)
             .map(|i| NeuronLocation::Output(i))
+            .map(|loc| self.process_neuron(loc))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
+    }
+
+    #[cfg(feature = "rayon")]
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
+        inputs.par_iter().enumerate().for_each(|(i, v)| {
+            let mut nw = self.input_layer[i].write().unwrap();
+            nw.state.value = *v;
+            nw.state.processed = true;
+        });
+
+        (0..O)
+            .map(|i| NeuronLocation::Output(i))
+            .collect::<Vec<_>>()
+            .into_par_iter()
             .map(|loc| self.process_neuron(loc))
             .collect::<Vec<_>>()
             .try_into()
@@ -50,7 +70,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     #[cfg(feature = "rayon")]
     pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
-        println!("processing");
         let n = self.get_neuron(loc);
 
         {
@@ -61,35 +80,19 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             }
         }
 
-        n.read().unwrap().inputs
-            .clone()
-            .into_par_iter()
-            .for_each(|(n2, w)| {
-                let processed = self.process_neuron(n2); // separate step so write lock doesnt block process_neuron on other threads
-                println!("processed a neuron");
-                n.write().unwrap().state.value += processed * w // causing a hang smh?
-            });
+        let val: f32 = n.read().unwrap().inputs
+            .par_iter()
+            .map(|&(n2, w)| {
+                let processed = self.process_neuron(n2);
+                processed * w
+            })
+            .sum();
 
-        println!("processed whole thing");
-        n.write().unwrap().sigmoid();
+        let mut nw = n.write().unwrap();
+        nw.state.value += val;
+        nw.sigmoid();
 
-        let nr = n.read().unwrap();
-        nr.state.value
-    }
-
-    #[cfg(feature = "rayon")]
-    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
-        inputs.par_iter().enumerate().for_each(|(i, v)| {
-            self.input_layer[i].write().unwrap().state.value = *v;
-        });
-
-        (0..O)
-            .into_par_iter()
-            .map(|i| NeuronLocation::Output(i))
-            .map(|loc| self.process_neuron(loc))
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
+        nw.state.value
     }
 
     pub fn get_neuron(&self, loc: NeuronLocation) -> Arc<RwLock<Neuron>> {

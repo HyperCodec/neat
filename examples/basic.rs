@@ -108,13 +108,18 @@ fn main() {
         sim.next_generation();
     }
 
-    let maxfit = sim.entities
+    let fits: Vec<_> = sim.entities
         .iter()
         .map(fitness)
+        .collect();
+
+    let maxfit = fits
+        .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
 
-    dbg!(maxfit);
+
+    dbg!(&fits, maxfit);
 }
 
 #[cfg(feature = "rayon")]
@@ -129,11 +134,16 @@ fn main() {
         sim.next_generation();
     }
 
-    let maxfit = sim.entities
+    let fits: Vec<_> = sim.entities
         .iter()
         .map(fitness)
+        .collect();
+
+    let maxfit = fits
+        .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
 
-    dbg!(maxfit);
+
+    dbg!(&fits, maxfit);
 }
