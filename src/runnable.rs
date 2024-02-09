@@ -18,6 +18,7 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
     output_layer: [Rc<RefCell<Neuron>>; O],
 }
 
+/// Parallelized version of the [`NeuralNetwork`] struct.
 #[derive(Debug)]
 #[cfg(feature = "rayon")]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
@@ -37,13 +38,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         (0..O)
-            .map(|i| NeuronLocation::Output(i))
+            .map(NeuronLocation::Output)
             .map(|loc| self.process_neuron(loc))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap()
     }
 
+    /// Parallelized prediction of outputs from inputs.
     #[cfg(feature = "rayon")]
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         inputs.par_iter().enumerate().for_each(|(i, v)| {
@@ -53,7 +55,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         });
 
         (0..O)
-            .map(|i| NeuronLocation::Output(i))
+            .map(NeuronLocation::Output)
             .collect::<Vec<_>>()
             .into_par_iter()
             .map(|loc| self.process_neuron(loc))
@@ -149,6 +151,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Flushes the neural network's state.
     #[cfg(feature = "rayon")]
     pub fn flush_state(&self) {
         self.input_layer

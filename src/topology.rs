@@ -97,7 +97,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 (self.input_layer[i].clone(), NeuronLocation::Input(i))
             }
             1 => {
-                if self.hidden_layers.len() == 0 {
+                if self.hidden_layers.is_empty() {
                     return self.rand_neuron(rng);
                 }
 
@@ -154,7 +154,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 // split preexisting connection
                 let (mut n2, _) = self.rand_neuron(rng);
 
-                while n2.read().unwrap().inputs.len() == 0 {
+                while n2.read().unwrap().inputs.is_empty() {
                     (n2, _) = self.rand_neuron(rng);
                 }
 
@@ -173,7 +173,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 // add a connection
                 let (mut n1, mut loc1) = self.rand_neuron(rng);
 
-                while n1.read().unwrap().inputs.len() == 0 {
+                while n1.read().unwrap().inputs.is_empty() {
                     (n1, loc1) = self.rand_neuron(rng);
                 }
 
@@ -190,7 +190,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 // mutate a connection
                 let (mut n, _) = self.rand_neuron(rng);
 
-                while n.read().unwrap().inputs.len() == 0 {
+                while n.read().unwrap().inputs.is_empty() {
                     (n, _) = self.rand_neuron(rng);
                 }
 
@@ -256,26 +256,17 @@ pub enum NeuronLocation {
 impl NeuronLocation {
     /// Returns `true` if it points to the input layer. Otherwise, returns `false`.
     pub fn is_input(&self) -> bool {
-        match self {
-            Self::Input(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Input(_))
     }
 
     /// Returns `true` if it points to the hidden layer. Otherwise, returns `false`.
     pub fn is_hidden(&self) -> bool {
-        match self {
-            Self::Hidden(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Hidden(_))
     }
 
     /// Returns `true` if it points to the output layer. Otherwise, returns `false`.
     pub fn is_output(&self) -> bool {
-        match self {
-            Self::Output(_) => true,
-            _ => false,
-        }
+        matches!(self, Self::Output(_))
     }
 
     /// Retrieves the index value, regardless of layer. Does not consume.
