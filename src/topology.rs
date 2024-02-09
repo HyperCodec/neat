@@ -57,7 +57,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
             return true;
         }
 
-        for &(n, _w) in &self.get_neuron(loc2).read().unwrap().inputs {
+        for &(n, _w) in &self.get_neuron(loc1).read().unwrap().inputs {
             if self.is_connection_cyclic(n, loc2) {
                 return true;
             }
