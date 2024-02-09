@@ -5,6 +5,8 @@ use crate::topology::*;
 #[cfg(feature = "rayon")] use std::sync::{Arc, RwLock};
 #[cfg(feature = "rayon")] use rayon::prelude::*;
 
+/// A runnable, stated Neural Network generated from a [NeuralNetworkToplogy]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
+/// Because this has state, you need to run [`NeuralNetwork::flush_state`] between [`NeuralNetwork::predict`] calls.
 #[derive(Debug)]
 #[cfg(not(feature = "rayon"))]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
@@ -22,6 +24,7 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 }
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
+    /// Predicts an output for the given inputs.
     #[cfg(not(feature = "rayon"))]
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         for (i, v) in inputs.iter().enumerate() {
@@ -57,7 +60,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     #[cfg(not(feature = "rayon"))]
-    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
+    fn process_neuron(&self, loc: NeuronLocation) -> f32 {
         let n = self.get_neuron(loc);
 
         {
@@ -80,7 +83,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     #[cfg(feature = "rayon")]
-    pub fn process_neuron(&self, loc: NeuronLocation) -> f32 {
+    fn process_neuron(&self, loc: NeuronLocation) -> f32 {
         let n = self.get_neuron(loc);
 
         {
@@ -124,6 +127,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Flushes the network's state after a [prediction][NeuralNetwork::predict]. 
     #[cfg(not(feature = "rayon"))]
     pub fn flush_state(&self) {
         for n in &self.input_layer {
@@ -207,18 +211,23 @@ impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for Neur
     }
 }
 
+/// A state-filled neuron.
 #[derive(Clone, Debug)]
 pub struct Neuron {
     inputs: Vec<(NeuronLocation, f32)>,
     bias: f32,
-    state: NeuronState,
+    
+    /// The current state of the neuron.
+    pub state: NeuronState,
 }
 
 impl Neuron {
+    /// Flushes a neuron's state. Called by [`NeuralNetwork::flush_state`]
     pub fn flush_state(&mut self) {
         self.state.value = self.bias;
     }
 
+    /// Applies the sigoid activation function to the state's current value.
     pub fn sigmoid(&mut self) {
         self.state.value = 1. / (1. + std::f32::consts::E.powf(-self.state.value))
     }
@@ -237,16 +246,24 @@ impl From<&NeuronTopology> for Neuron {
     }
 }
 
+/// A state used in [`Neuron`]s for cache.
 #[derive(Clone, Debug, Default)]
 pub struct NeuronState {
+    /// The current value of the neuron. Initialized to a neuron's bias when flushed.
     pub value: f32,
+
+    /// Whether or not [`value`][NeuronState::value] has finished processing.
     pub processed: bool,
 }
 
+/// A blanket trait for iterators meant to help with interpreting the output of a [`NeuralNetwork`]
+#[cfg(feature = "max-index")]
 pub trait MaxIndex<T: PartialOrd> {
+    /// Retrieves the index of the max value.
     fn max_index(self) -> usize;
 }
 
+#[cfg(feature = "max-index")]
 impl<I: Iterator<Item = T>, T: PartialOrd> MaxIndex<T> for I {
     // slow and lazy implementation but it works (will prob optimize in the future)
     fn max_index(self) -> usize {

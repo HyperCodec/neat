@@ -9,9 +9,10 @@ homepage = "https://github.com/inflectrix/neat"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
+default = ["max-index"]
 #crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
+max-index = []
 
 
 [dependencies]

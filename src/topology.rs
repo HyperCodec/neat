@@ -3,16 +3,29 @@ use std::sync::{Arc, RwLock};
 use genetic_rs::prelude::*;
 use rand::prelude::*;
 
+/// A stateless neural network topology.
+/// This is the struct you want to use in your agent's inheritance.
+/// See [`NeuralNetwork::from`][crate::NeuralNetwork::from] for how to convert this to a runnable neural network.
 #[derive(Debug)]
 pub struct NeuralNetworkTopology<const I: usize, const O: usize> {
+    /// The input layer of the neural network. Uses a fixed length of `I`.
     pub input_layer: [Arc<RwLock<NeuronTopology>>; I],
+    
+    /// The hidden layers of the neural network. Because neurons have a flexible connection system, all of them exist in the same flat vector.
     pub hidden_layers: Vec<Arc<RwLock<NeuronTopology>>>,
+
+    /// The output layer of the neural netowrk. Uses a fixed length of `O`.
     pub output_layer: [Arc<RwLock<NeuronTopology>>; O],
+
+    /// The mutation rate used in [`NeuralNetworkTopology::mutate`].
     pub mutation_rate: f32,
+
+    /// The number of mutation passes (and thus, maximum number of possible mutations that can occur for each entity in the generation).
     pub mutation_passes: usize,
 }
 
 impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
+    /// Creates a new [`NeuralNetworkTopology`].
     pub fn new(mutation_rate: f32, mutation_passes: usize, rng: &mut impl Rng) -> Self {
         let input_layer: [Arc<RwLock<NeuronTopology>>; I] = (0..I)
             .map(|_| Arc::new(RwLock::new(NeuronTopology::new(vec![], rng))))
@@ -66,6 +79,8 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         false
     }
 
+    /// Gets a neuron pointer from a [`NeuronLocation`].
+    /// You shouldn't ever need to directly call this unless you are doing complex custom mutations.
     pub fn get_neuron(&self, loc: NeuronLocation) -> Arc<RwLock<NeuronTopology>> {
         match loc {
             NeuronLocation::Input(i) => self.input_layer[i].clone(),
@@ -74,6 +89,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         }
     }
 
+    /// Gets a random neuron and its location.
     pub fn rand_neuron(&self, rng: &mut impl Rng) -> (Arc<RwLock<NeuronTopology>>, NeuronLocation) {
         match rng.gen_range(0..3) {
             0 => {
@@ -198,13 +214,18 @@ impl CrossoverReproduction for NeuralNetworkTopology {
     }
 }
 
+/// A stateless version of [`Neuron`][crate::Neuron].
 #[derive(Debug, Clone)]
 pub struct NeuronTopology {
+    /// The input locations and weights.
     pub inputs: Vec<(NeuronLocation, f32)>,
+
+    /// The neuron's bias.
     pub bias: f32,
 }
 
 impl NeuronTopology {
+    /// Creates a new neuron with the given input locations.
     pub fn new(inputs: Vec<NeuronLocation>, rng: &mut impl Rng) -> Self {
         let inputs = inputs
             .into_iter()
@@ -218,14 +239,21 @@ impl NeuronTopology {
     }
 }
 
+/// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeuronLocation {
+    /// Points to a neuron in the input layer at contained index.
     Input(usize),
+    
+    /// Points to a neuron in the hidden layer at contained index.
     Hidden(usize),
+
+    /// Points to a neuron in the output layer at contained index.
     Output(usize),
 }
 
 impl NeuronLocation {
+    /// Returns `true` if it points to the input layer. Otherwise, returns `false`.
     pub fn is_input(&self) -> bool {
         match self {
             Self::Input(_) => true,
@@ -233,6 +261,7 @@ impl NeuronLocation {
         }
     }
 
+    /// Returns `true` if it points to the hidden layer. Otherwise, returns `false`.
     pub fn is_hidden(&self) -> bool {
         match self {
             Self::Hidden(_) => true,
@@ -240,6 +269,7 @@ impl NeuronLocation {
         }
     }
 
+    /// Returns `true` if it points to the output layer. Otherwise, returns `false`.
     pub fn is_output(&self) -> bool {
         match self {
             Self::Output(_) => true,
@@ -247,6 +277,7 @@ impl NeuronLocation {
         }
     }
 
+    /// Retrieves the index value, regardless of layer. Does not consume.
     pub fn unwrap(&self) -> usize {
         match self {
             Self::Input(i) => *i,
