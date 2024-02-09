@@ -1,10 +1,15 @@
 [package]
 name = "neat"
+description = "Crate for working with NEAT in rust"
 version = "0.1.0"
 edition = "2021"
 authors = ["Inflectrix"]
 repository = "https://github.com/inflectrix/neat"
 homepage = "https://github.com/inflectrix/neat"
+readme = "README.md"
+keywords = ["genetic", "machine learning", "intelligence", "algorithm", "rust"]
+categories = ["algorithms", "science", "simulation"]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
