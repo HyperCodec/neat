@@ -3,8 +3,8 @@
 //! - [x] base (single-core) crate
 //! - [x] rayon
 //! - [ ] crossover
-//! 
-//! You can get started by 
+//!
+//! You can get started by
 
 #![warn(missing_docs)]
 
@@ -16,5 +16,5 @@ pub mod topology;
 pub mod runnable;
 
 pub use genetic_rs::prelude::*;
-pub use topology::*;
 pub use runnable::*;
+pub use topology::*;

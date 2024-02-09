@@ -1,9 +1,12 @@
 use crate::topology::*;
 
-#[cfg(not(feature = "rayon"))] use std::{rc::Rc, cell::RefCell};
+#[cfg(not(feature = "rayon"))]
+use std::{cell::RefCell, rc::Rc};
 
-#[cfg(feature = "rayon")] use std::sync::{Arc, RwLock};
-#[cfg(feature = "rayon")] use rayon::prelude::*;
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
+#[cfg(feature = "rayon")]
+use std::sync::{Arc, RwLock};
 
 /// A runnable, stated Neural Network generated from a [NeuralNetworkToplogy]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
 /// Because this has state, you need to run [`NeuralNetwork::flush_state`] between [`NeuralNetwork::predict`] calls.
@@ -94,7 +97,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             }
         }
 
-        let val: f32 = n.read().unwrap().inputs
+        let val: f32 = n
+            .read()
+            .unwrap()
+            .inputs
             .par_iter()
             .map(|&(n2, w)| {
                 let processed = self.process_neuron(n2);
@@ -127,7 +133,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    /// Flushes the network's state after a [prediction][NeuralNetwork::predict]. 
+    /// Flushes the network's state after a [prediction][NeuralNetwork::predict].
     #[cfg(not(feature = "rayon"))]
     pub fn flush_state(&self) {
         for n in &self.input_layer {
@@ -137,38 +143,47 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for n in &self.hidden_layers {
             n.borrow_mut().flush_state();
         }
-        
+
         for n in &self.output_layer {
             n.borrow_mut().flush_state();
         }
     }
-    
+
     #[cfg(feature = "rayon")]
     pub fn flush_state(&self) {
-        self.input_layer.par_iter().for_each(|n| n.write().unwrap().flush_state());
+        self.input_layer
+            .par_iter()
+            .for_each(|n| n.write().unwrap().flush_state());
 
-        self.hidden_layers.par_iter().for_each(|n| n.write().unwrap().flush_state());
-        
-        self.output_layer.par_iter().for_each(|n| n.write().unwrap().flush_state());
+        self.hidden_layers
+            .par_iter()
+            .for_each(|n| n.write().unwrap().flush_state());
+
+        self.output_layer
+            .par_iter()
+            .for_each(|n| n.write().unwrap().flush_state());
     }
 }
 
 impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NeuralNetwork<I, O> {
     #[cfg(not(feature = "rayon"))]
     fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
-        let input_layer = value.input_layer
+        let input_layer = value
+            .input_layer
             .iter()
             .map(|n| Rc::new(RefCell::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let hidden_layers = value.hidden_layers
+        let hidden_layers = value
+            .hidden_layers
             .iter()
             .map(|n| Rc::new(RefCell::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect();
 
-        let output_layer = value.output_layer
+        let output_layer = value
+            .output_layer
             .iter()
             .map(|n| Rc::new(RefCell::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect::<Vec<_>>()
@@ -184,19 +199,22 @@ impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for Neur
 
     #[cfg(feature = "rayon")]
     fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
-        let input_layer = value.input_layer
+        let input_layer = value
+            .input_layer
             .iter()
             .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let hidden_layers = value.hidden_layers
+        let hidden_layers = value
+            .hidden_layers
             .iter()
             .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect();
 
-        let output_layer = value.output_layer
+        let output_layer = value
+            .output_layer
             .iter()
             .map(|n| Arc::new(RwLock::new(Neuron::from(&n.read().unwrap().clone()))))
             .collect::<Vec<_>>()
@@ -216,7 +234,7 @@ impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for Neur
 pub struct Neuron {
     inputs: Vec<(NeuronLocation, f32)>,
     bias: f32,
-    
+
     /// The current state of the neuron.
     pub state: NeuronState,
 }
@@ -241,7 +259,7 @@ impl From<&NeuronTopology> for Neuron {
             state: NeuronState {
                 value: value.bias,
                 ..Default::default()
-            }
+            },
         }
     }
 }
@@ -267,8 +285,7 @@ pub trait MaxIndex<T: PartialOrd> {
 impl<I: Iterator<Item = T>, T: PartialOrd> MaxIndex<T> for I {
     // slow and lazy implementation but it works (will prob optimize in the future)
     fn max_index(self) -> usize {
-        self
-            .enumerate()
+        self.enumerate()
             .max_by(|(_, v), (_, v2)| v.partial_cmp(v2).unwrap())
             .unwrap()
             .0

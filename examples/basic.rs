@@ -48,7 +48,7 @@ fn fitness(dna: &AgentDNA) -> f32 {
 
     let mut fitness = 0.;
     let mut rng = rand::thread_rng();
-    
+
     for _ in 0..10 {
         // 10 games
 
@@ -64,7 +64,10 @@ fn fitness(dna: &AgentDNA) -> f32 {
 
         loop {
             // perform actions in game
-            let action = agent.network.predict([(food_pos.0 - agent_pos.0) as f32, (food_pos.1 - agent_pos.1) as f32]);
+            let action = agent.network.predict([
+                (food_pos.0 - agent_pos.0) as f32,
+                (food_pos.1 - agent_pos.1) as f32,
+            ]);
             let action = action.iter().max_index();
 
             match action {
@@ -81,7 +84,8 @@ fn fitness(dna: &AgentDNA) -> f32 {
                 break; // new game
             } else {
                 // lose fitness for being slow and far away
-                fitness -= (food_pos.0 - agent_pos.0 + food_pos.1 - agent_pos.1).abs() as f32 * 0.001;
+                fitness -=
+                    (food_pos.0 - agent_pos.0 + food_pos.1 - agent_pos.1).abs() as f32 * 0.001;
             }
 
             // 50 steps per game
@@ -108,42 +112,30 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities
-        .iter()
-        .map(fitness)
-        .collect();
+    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
-
 
     dbg!(&fits, maxfit);
 }
 
 #[cfg(feature = "rayon")]
 fn main() {
-    let mut sim = GeneticSim::new(
-        Vec::gen_random(100),
-        fitness,
-        division_pruning_nextgen,
-    );
+    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, division_pruning_nextgen);
 
     for _ in 0..100 {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities
-        .iter()
-        .map(fitness)
-        .collect();
+    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
         .max_by(|a, b| a.partial_cmp(b).unwrap())
         .unwrap();
-
 
     dbg!(&fits, maxfit);
 }
