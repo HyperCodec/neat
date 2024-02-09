@@ -79,3 +79,6 @@ fn main() {
     // ... simulate generations, etc.
 }
 ```
+
+### License
+This crate falls under the `MIT` license
