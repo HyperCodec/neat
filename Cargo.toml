@@ -7,7 +7,7 @@ authors = ["Inflectrix"]
 repository = "https://github.com/inflectrix/neat"
 homepage = "https://github.com/inflectrix/neat"
 readme = "README.md"
-keywords = ["genetic", "machine learning", "intelligence", "algorithm", "rust"]
+keywords = ["genetic", "machine-learning", "ai", "algorithm", "evolution"]
 categories = ["algorithms", "science", "simulation"]
 license = "MIT"
 
