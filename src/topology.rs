@@ -197,7 +197,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let mut n = n.write().unwrap();
                 let i = rng.gen_range(0..n.inputs.len());
                 let (_, w) = &mut n.inputs[i];
-                *w += rng.gen::<f32>() * rate;
+                *w += rng.gen_range(-1.0..1.0) * rate;
             }
         }
     }
