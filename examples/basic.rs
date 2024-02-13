@@ -112,7 +112,7 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
@@ -130,7 +130,7 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
