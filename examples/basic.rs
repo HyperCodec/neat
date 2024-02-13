@@ -15,7 +15,7 @@ impl RandomlyMutable for AgentDNA {
 impl Prunable for AgentDNA {}
 
 impl DivisionReproduction for AgentDNA {
-    fn spawn_child(&self, rng: &mut impl Rng) -> Self {
+    fn divide(&self, rng: &mut impl Rng) -> Self {
         let mut child = self.clone();
         child.mutate(self.network.mutation_rate, rng);
         child
