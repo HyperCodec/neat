@@ -41,9 +41,9 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "genetic-rs"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ec3a578daff9a0d1302fd5ffb32d0f5e2c11c1f62ce921f519709d1e5cc8280"
+checksum = "694916cca5538e02a6f04a0fcb5deef9297b460c697520b9f88ea4b9c0a1a09c"
 dependencies = [
  "rand",
  "rayon",

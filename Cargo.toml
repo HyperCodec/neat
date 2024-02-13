@@ -21,6 +21,6 @@ max-index = []
 
 
 [dependencies]
-genetic-rs = "0.2.1"
+genetic-rs = "0.3"
 rand = "0.8.5"
 rayon = { version = "1.8.1", optional = true }
