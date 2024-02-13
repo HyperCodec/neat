@@ -204,7 +204,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 }
 
 impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopology<I, O> {
-    fn spawn_child(&self, rng: &mut impl rand::Rng) -> Self {
+    fn divide(&self, rng: &mut impl rand::Rng) -> Self {
         let mut child = self.clone();
         child.mutate(self.mutation_rate, rng);
         child
@@ -213,7 +213,7 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
 
 #[cfg(feature = "crossover")]
 impl CrossoverReproduction for NeuralNetworkTopology {
-    fn spawn_child(&self, other: &Self, rng: &mut impl Rng) -> Self {
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         todo!();
     }
 }
