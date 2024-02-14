@@ -241,6 +241,14 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let (_, w) = &mut n.inputs[i];
                 *w += rng.gen_range(-1.0..1.0) * rate;
             }
+
+            if rng.gen::<f32>() <= rate {
+                // mutate bias
+                let (n, _) = self.rand_neuron(rng);
+                let mut n = n.write().unwrap();
+
+                n.bias += rng.gen_range(-1.0..1.0) * rate;
+            }
         }
     }
 }
