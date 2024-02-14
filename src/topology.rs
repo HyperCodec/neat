@@ -1,4 +1,7 @@
-use std::{fmt, sync::{Arc, RwLock}};
+use std::{
+    fmt,
+    sync::{Arc, RwLock},
+};
 
 use genetic_rs::prelude::*;
 use rand::prelude::*;
@@ -43,7 +46,13 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
     /// Creates a new [`NeuralNetworkTopology`].
     pub fn new(mutation_rate: f32, mutation_passes: usize, rng: &mut impl Rng) -> Self {
         let input_layer: [Arc<RwLock<NeuronTopology>>; I] = (0..I)
-            .map(|_| Arc::new(RwLock::new(NeuronTopology::new_with_activation(vec![], activation_fn!(linear_activation), rng))))
+            .map(|_| {
+                Arc::new(RwLock::new(NeuronTopology::new_with_activation(
+                    vec![],
+                    activation_fn!(linear_activation),
+                    rng,
+                )))
+            })
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -66,7 +75,11 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 })
                 .collect();
 
-            output_layer.push(Arc::new(RwLock::new(NeuronTopology::new_with_activation(input, activation_fn!(sigmoid), rng))));
+            output_layer.push(Arc::new(RwLock::new(NeuronTopology::new_with_activation(
+                input,
+                activation_fn!(sigmoid),
+                rng,
+            ))));
         }
 
         let output_layer = output_layer.try_into().unwrap();
@@ -182,8 +195,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let mut n3 = NeuronTopology::new(vec![loc], rng);
                 n3.inputs[0].1 = 1.;
 
-                self.hidden_layers
-                    .push(Arc::new(RwLock::new(n3)));
+                self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
                 n2.inputs.insert(i, (loc3, w));
             }
@@ -231,7 +243,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 if !done {
                     'outer: for n in &self.output_layer {
                         let mut n2 = n.write().unwrap();
-    
+
                         for (i, (loc2, _)) in n2.inputs.iter().enumerate() {
                             if loc == *loc2 {
                                 n2.inputs.remove(i);
@@ -329,7 +341,9 @@ pub fn relu(n: f32) -> f32 {
 }
 
 /// Activation function that does nothing.
-pub fn linear_activation(n: f32) -> f32 {n}
+pub fn linear_activation(n: f32) -> f32 {
+    n
+}
 
 /// A stateless version of [`Neuron`][crate::Neuron].
 #[derive(Debug, Clone)]
@@ -357,15 +371,30 @@ impl NeuronTopology {
     }
 
     /// Takes a collection of activation functions and chooses a random one to use.
-    pub fn new_with_activations(inputs: Vec<NeuronLocation>, activations: impl IntoIterator<Item = ActivationFn>, rng: &mut impl Rng) -> Self {
+    pub fn new_with_activations(
+        inputs: Vec<NeuronLocation>,
+        activations: impl IntoIterator<Item = ActivationFn>,
+        rng: &mut impl Rng,
+    ) -> Self {
         let mut activations: Vec<_> = activations.into_iter().collect();
 
-        Self::new_with_activation(inputs, activations.remove(rng.gen_range(0..activations.len())), rng)
+        Self::new_with_activation(
+            inputs,
+            activations.remove(rng.gen_range(0..activations.len())),
+            rng,
+        )
     }
 
     /// Creates a neuron with the activation.
-    pub fn new_with_activation(inputs: Vec<NeuronLocation>, activation: ActivationFn, rng: &mut impl Rng) -> Self {
-        let inputs = inputs.into_iter().map(|i| (i, rng.gen_range(-1.0..1.0))).collect();
+    pub fn new_with_activation(
+        inputs: Vec<NeuronLocation>,
+        activation: ActivationFn,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let inputs = inputs
+            .into_iter()
+            .map(|i| (i, rng.gen_range(-1.0..1.0)))
+            .collect();
 
         Self {
             inputs,
