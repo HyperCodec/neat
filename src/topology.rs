@@ -308,7 +308,7 @@ impl CrossoverReproduction for NeuralNetworkTopology {
 #[derive(Clone)]
 pub struct ActivationFn {
     /// The actual activation function.
-    pub func: Arc<dyn Fn(f32) -> f32 + Send + 'static>,
+    pub func: Arc<dyn Fn(f32) -> f32 + Send + Sync + 'static>,
     name: String,
 }
 

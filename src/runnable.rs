@@ -112,7 +112,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let mut nw = n.write().unwrap();
         nw.state.value += val;
-        nw.sigmoid();
+        nw.activate();
 
         nw.state.value
     }
