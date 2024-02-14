@@ -138,6 +138,30 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
             }
         }
     }
+
+    fn deletion_shift(&self, deleted: NeuronLocation) {
+        if !deleted.is_hidden() {
+            panic!("Invalid neuron deletion");
+        }
+
+        for n in &self.hidden_layers {
+            let mut nw = n.write().unwrap();
+            for (loc, _w) in &mut nw.inputs {
+                if loc.is_hidden() && loc.unwrap() > deleted.unwrap() {
+                    *loc = NeuronLocation::Hidden(loc.unwrap() - 1);
+                }
+            }
+        }
+
+        for n in &self.output_layer {
+            let mut nw = n.write().unwrap();
+            for (loc, _w) in &mut nw.inputs {
+                if loc.is_hidden() && loc.unwrap() > deleted.unwrap() {
+                    *loc = NeuronLocation::Hidden(loc.unwrap() - 1);
+                }
+            }
+        }
+    }
 }
 
 // need to do all this manually because Arcs are cringe
@@ -252,6 +276,8 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                         }
                     }
                 }
+
+                self.deletion_shift(loc); // shift all locations because of index change
             }
 
             if rng.gen::<f32>() <= rate {
