@@ -163,8 +163,12 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let (loc, w) = n2.inputs.remove(i);
 
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
+
+                let mut n3 = NeuronTopology::new(vec![loc], rng);
+                n3.inputs[0].1 = 1.;
+
                 self.hidden_layers
-                    .push(Arc::new(RwLock::new(NeuronTopology::new(vec![loc], rng)))); // for some reason, this isn't actually doing anything once it goes to the next scope
+                    .push(Arc::new(RwLock::new(n3)));
 
                 n2.inputs.insert(i, (loc3, w));
             }
@@ -184,6 +188,44 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 }
 
                 n2.write().unwrap().inputs.push((loc1, rng.gen()));
+            }
+
+            if rng.gen::<f32>() <= rate && !self.hidden_layers.is_empty() {
+                // remove a neuron
+                let (_, mut loc) = self.rand_neuron(rng);
+
+                while !loc.is_hidden() {
+                    (_, loc) = self.rand_neuron(rng);
+                }
+
+                self.hidden_layers.remove(loc.unwrap());
+
+                let mut done = false;
+                'outer: for n in &self.hidden_layers {
+                    let n2 = n.write().unwrap();
+
+                    for (i, (loc2, _)) in n2.inputs.iter().enumerate() {
+                        if i == loc {
+                            n2.inputs.remove(i);
+                            done = true;
+                            break 'outer;
+                        }
+                    }
+                }
+
+                if !done {
+                    'outer: for n in &self.output_layer {
+                        let n2 = n.write().unwrap();
+    
+                        for (i, (loc2, _)) in n2.inputs.iter().enumerate() {
+                            if i == loc {
+                                n2.inputs.remove(i);
+                                done = true;
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
             }
 
             if rng.gen::<f32>() <= rate {
@@ -211,12 +253,14 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
     }
 }
 
+/*
 #[cfg(feature = "crossover")]
 impl CrossoverReproduction for NeuralNetworkTopology {
     fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         todo!();
     }
 }
+*/
 
 /// A stateless version of [`Neuron`][crate::Neuron].
 #[derive(Debug, Clone)]
