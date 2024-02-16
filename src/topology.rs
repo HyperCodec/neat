@@ -124,11 +124,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 let i = rng.gen_range(0..self.input_layer.len());
                 (self.input_layer[i].clone(), NeuronLocation::Input(i))
             }
-            1 => {
-                if self.hidden_layers.is_empty() {
-                    return self.rand_neuron(rng);
-                }
-
+            1 if !self.hidden_layers.is_empty() => {
                 let i = rng.gen_range(0..self.hidden_layers.len());
                 (self.hidden_layers[i].clone(), NeuronLocation::Hidden(i))
             }
@@ -161,7 +157,11 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                         return None;
                     }
 
-                    Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w))
+                    if input_loc.unwrap() > index {
+                        return Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w));
+                    }
+
+                    Some((input_loc, w))
                 })
                 .collect();
         }
@@ -179,7 +179,11 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                         return None;
                     }
 
-                    Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w)) // TODO fix attempt to subtract with overflow (no idea)
+                    if input_loc.unwrap() > index {
+                        return Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w));
+                    }
+
+                    Some((input_loc, w))
                 })
                 .collect();
         }
