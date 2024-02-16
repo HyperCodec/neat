@@ -145,30 +145,46 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         }
     
         let index = loc.unwrap();
-        let n = Arc::into_inner(self.hidden_layers.remove(index))
-            .unwrap()
-            .into_inner()
-            .unwrap();
-    
+        let neuron = Arc::into_inner(self.hidden_layers.remove(index)).unwrap();
+
         for n in &self.hidden_layers {
             let mut nw = n.write().unwrap();
-            for (loc, _w) in &mut nw.inputs {
-                if loc.is_hidden() && loc.unwrap() > index {
-                    *loc = NeuronLocation::Hidden(loc.unwrap() - 1);
-                }
-            }
+
+            nw.inputs = nw.inputs
+                .iter()
+                .filter_map(|&(input_loc, w)| {
+                    if !input_loc.is_hidden() {
+                        return Some((input_loc, w));
+                    }
+
+                    if input_loc.unwrap() == index {
+                        return None;
+                    }
+
+                    Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w))
+                })
+                .collect();
         }
     
         for n2 in &self.output_layer {
             let mut nw = n2.write().unwrap();
-            for (iloc, _w) in &mut nw.inputs {
-                if iloc.is_hidden() && iloc.unwrap() > index {
-                    *iloc = NeuronLocation::Hidden(loc.unwrap() - 1);
-                }
-            }
+            nw.inputs = nw.inputs
+                .iter()
+                .filter_map(|&(input_loc, w)| {
+                    if !input_loc.is_hidden() {
+                        return Some((input_loc, w));
+                    }
+
+                    if input_loc.unwrap() == index {
+                        return None;
+                    }
+
+                    Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w)) // TODO fix attempt to subtract with overflow (no idea)
+                })
+                .collect();
         }
     
-        n
+        neuron.into_inner().unwrap()
     }
 }
 
@@ -225,7 +241,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
 
                 let mut n3 = NeuronTopology::new(vec![loc], rng);
-                n3.inputs[0].1 = 1.;
+                n3.inputs[0].1 = rng.gen_range(-1.0..1.0);
 
                 self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
