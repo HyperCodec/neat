@@ -139,28 +139,36 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         }
     }
 
-    fn deletion_shift(&self, deleted: NeuronLocation) {
-        if !deleted.is_hidden() {
+    fn delete_neuron(&mut self, loc: NeuronLocation) -> NeuronTopology {
+        if !loc.is_hidden() {
             panic!("Invalid neuron deletion");
         }
-
+    
+        let index = loc.unwrap();
+        let n = Arc::into_inner(self.hidden_layers.remove(index))
+            .unwrap()
+            .into_inner()
+            .unwrap();
+    
         for n in &self.hidden_layers {
             let mut nw = n.write().unwrap();
             for (loc, _w) in &mut nw.inputs {
-                if loc.is_hidden() && loc.unwrap() > deleted.unwrap() {
+                if loc.is_hidden() && loc.unwrap() > index {
                     *loc = NeuronLocation::Hidden(loc.unwrap() - 1);
                 }
             }
         }
-
-        for n in &self.output_layer {
-            let mut nw = n.write().unwrap();
-            for (loc, _w) in &mut nw.inputs {
-                if loc.is_hidden() && loc.unwrap() > deleted.unwrap() {
-                    *loc = NeuronLocation::Hidden(loc.unwrap() - 1);
+    
+        for n2 in &self.output_layer {
+            let mut nw = n2.write().unwrap();
+            for (iloc, _w) in &mut nw.inputs {
+                if iloc.is_hidden() && iloc.unwrap() > index {
+                    *iloc = NeuronLocation::Hidden(loc.unwrap() - 1);
                 }
             }
         }
+    
+        n
     }
 }
 
@@ -248,36 +256,9 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 while !loc.is_hidden() {
                     (_, loc) = self.rand_neuron(rng);
                 }
-
-                self.hidden_layers.remove(loc.unwrap());
-
-                let mut done = false;
-                'outer: for n in &self.hidden_layers {
-                    let mut n2 = n.write().unwrap();
-
-                    for (i, (loc2, _)) in n2.inputs.iter().enumerate() {
-                        if loc == *loc2 {
-                            n2.inputs.remove(i);
-                            done = true;
-                            break 'outer;
-                        }
-                    }
-                }
-
-                if !done {
-                    'outer: for n in &self.output_layer {
-                        let mut n2 = n.write().unwrap();
-
-                        for (i, (loc2, _)) in n2.inputs.iter().enumerate() {
-                            if loc == *loc2 {
-                                n2.inputs.remove(i);
-                                break 'outer;
-                            }
-                        }
-                    }
-                }
-
-                self.deletion_shift(loc); // shift all locations because of index change
+                
+                // delete the neuron
+                self.delete_neuron(loc);
             }
 
             if rng.gen::<f32>() <= rate {
