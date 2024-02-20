@@ -1,6 +1,5 @@
 use std::{
-    fmt,
-    sync::{Arc, RwLock},
+    collections::HashSet, fmt, sync::{Arc, RwLock}
 };
 
 use genetic_rs::prelude::*;
@@ -93,17 +92,47 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         }
     }
 
-    fn is_connection_cyclic(&self, loc1: NeuronLocation, loc2: NeuronLocation) -> bool {
-        if loc1 == loc2 {
+    /// Creates a new connection between the neurons.
+    /// If the connection is cyclic, it does not add a connection and returns false.
+    /// Otherwise, it returns true.
+    pub fn add_connection(&mut self, from: NeuronLocation, to: NeuronLocation, weight: f32) -> bool {
+        if self.is_connection_cyclic(from, to) {
+            return false;
+        }
+    
+        // Add the connection since it is not cyclic
+        self.get_neuron(to).write().unwrap().inputs.push((from, weight));
+    
+        true
+    }
+    
+    fn is_connection_cyclic(&self, from: NeuronLocation, to: NeuronLocation) -> bool {
+        if to.is_input() || from.is_output() {
             return true;
         }
 
-        for &(n, _w) in &self.get_neuron(loc1).read().unwrap().inputs {
-            if self.is_connection_cyclic(n, loc2) {
+        let mut visited = HashSet::new();
+        self.dfs(from, to, &mut visited)
+    }
+    
+    // TODO rayon implementation
+    fn dfs(&self, current: NeuronLocation, target: NeuronLocation, visited: &mut HashSet<NeuronLocation>) -> bool {
+        if current == target {
+            return true;
+        }
+    
+        visited.insert(current);
+    
+        let n = self.get_neuron(current);
+        let nr = n.read().unwrap();
+    
+        for &(input, _) in &nr.inputs {
+            if !visited.contains(&input) && self.dfs(input, target, visited) {
                 return true;
             }
         }
-
+    
+        visited.remove(&current);
         false
     }
 
@@ -244,8 +273,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
 
-                let mut n3 = NeuronTopology::new(vec![loc], rng);
-                n3.inputs[0].1 = rng.gen_range(-1.0..1.0);
+                let n3 = NeuronTopology::new(vec![loc], rng);
 
                 self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
@@ -254,19 +282,13 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 
             if rng.gen::<f32>() <= rate {
                 // add a connection
-                let (mut n1, mut loc1) = self.rand_neuron(rng);
+                let (_, mut loc1) = self.rand_neuron(rng);
+                let (_, mut loc2) = self.rand_neuron(rng);
 
-                while n1.read().unwrap().inputs.is_empty() {
-                    (n1, loc1) = self.rand_neuron(rng);
+                while loc1.is_output() || !self.add_connection(loc1, loc2, rng.gen::<f32>()) {
+                    (_, loc1) = self.rand_neuron(rng);
+                    (_, loc2) = self.rand_neuron(rng);
                 }
-
-                let (mut n2, mut loc2) = self.rand_neuron(rng);
-
-                while self.is_connection_cyclic(loc1, loc2) {
-                    (n2, loc2) = self.rand_neuron(rng);
-                }
-
-                n2.write().unwrap().inputs.push((loc1, rng.gen()));
             }
 
             if rng.gen::<f32>() <= rate && !self.hidden_layers.is_empty() {
@@ -432,7 +454,7 @@ impl NeuronTopology {
 }
 
 /// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeuronLocation {
     /// Points to a neuron in the input layer at contained index.
     Input(usize),
