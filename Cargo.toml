@@ -15,7 +15,7 @@ license = "MIT"
 
 [features]
 default = ["max-index"]
-#crossover = ["genetic-rs/crossover"]
+crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
 max-index = []
 

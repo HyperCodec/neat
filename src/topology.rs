@@ -1,7 +1,26 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    collections::HashSet,
+    fmt,
+    sync::{Arc, RwLock},
+};
 
 use genetic_rs::prelude::*;
 use rand::prelude::*;
+
+/// Creates an [`ActivationFn`] object from a function
+#[macro_export]
+macro_rules! activation_fn {
+    ($F: path) => {
+        ActivationFn {
+            func: Arc::new($F),
+            name: String::from(stringify!($F)),
+        }
+    };
+
+    {$($F: path),*} => {
+        [$(activation_fn!($F)),*]
+    };
+}
 
 /// A stateless neural network topology.
 /// This is the struct you want to use in your agent's inheritance.
@@ -28,7 +47,13 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
     /// Creates a new [`NeuralNetworkTopology`].
     pub fn new(mutation_rate: f32, mutation_passes: usize, rng: &mut impl Rng) -> Self {
         let input_layer: [Arc<RwLock<NeuronTopology>>; I] = (0..I)
-            .map(|_| Arc::new(RwLock::new(NeuronTopology::new(vec![], rng))))
+            .map(|_| {
+                Arc::new(RwLock::new(NeuronTopology::new_with_activation(
+                    vec![],
+                    activation_fn!(linear_activation),
+                    rng,
+                )))
+            })
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -51,7 +76,11 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 })
                 .collect();
 
-            output_layer.push(Arc::new(RwLock::new(NeuronTopology::new(input, rng))));
+            output_layer.push(Arc::new(RwLock::new(NeuronTopology::new_with_activation(
+                input,
+                activation_fn!(sigmoid),
+                rng,
+            ))));
         }
 
         let output_layer = output_layer.try_into().unwrap();
@@ -65,17 +94,61 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
         }
     }
 
-    fn is_connection_cyclic(&self, loc1: NeuronLocation, loc2: NeuronLocation) -> bool {
-        if loc1 == loc2 {
+    /// Creates a new connection between the neurons.
+    /// If the connection is cyclic, it does not add a connection and returns false.
+    /// Otherwise, it returns true.
+    pub fn add_connection(
+        &mut self,
+        from: NeuronLocation,
+        to: NeuronLocation,
+        weight: f32,
+    ) -> bool {
+        if self.is_connection_cyclic(from, to) {
+            return false;
+        }
+
+        // Add the connection since it is not cyclic
+        self.get_neuron(to)
+            .write()
+            .unwrap()
+            .inputs
+            .push((from, weight));
+
+        true
+    }
+
+    fn is_connection_cyclic(&self, from: NeuronLocation, to: NeuronLocation) -> bool {
+        if to.is_input() || from.is_output() {
             return true;
         }
 
-        for &(n, _w) in &self.get_neuron(loc1).read().unwrap().inputs {
-            if self.is_connection_cyclic(n, loc2) {
+        let mut visited = HashSet::new();
+        self.dfs(from, to, &mut visited)
+    }
+
+    // TODO rayon implementation
+    fn dfs(
+        &self,
+        current: NeuronLocation,
+        target: NeuronLocation,
+        visited: &mut HashSet<NeuronLocation>,
+    ) -> bool {
+        if current == target {
+            return true;
+        }
+
+        visited.insert(current);
+
+        let n = self.get_neuron(current);
+        let nr = n.read().unwrap();
+
+        for &(input, _) in &nr.inputs {
+            if !visited.contains(&input) && self.dfs(input, target, visited) {
                 return true;
             }
         }
 
+        visited.remove(&current);
         false
     }
 
@@ -96,11 +169,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 let i = rng.gen_range(0..self.input_layer.len());
                 (self.input_layer[i].clone(), NeuronLocation::Input(i))
             }
-            1 => {
-                if self.hidden_layers.is_empty() {
-                    return self.rand_neuron(rng);
-                }
-
+            1 if !self.hidden_layers.is_empty() => {
                 let i = rng.gen_range(0..self.hidden_layers.len());
                 (self.hidden_layers[i].clone(), NeuronLocation::Hidden(i))
             }
@@ -109,6 +178,64 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 (self.output_layer[i].clone(), NeuronLocation::Output(i))
             }
         }
+    }
+
+    fn delete_neuron(&mut self, loc: NeuronLocation) -> NeuronTopology {
+        if !loc.is_hidden() {
+            panic!("Invalid neuron deletion");
+        }
+
+        let index = loc.unwrap();
+        let neuron = Arc::into_inner(self.hidden_layers.remove(index)).unwrap();
+
+        for n in &self.hidden_layers {
+            let mut nw = n.write().unwrap();
+
+            nw.inputs = nw
+                .inputs
+                .iter()
+                .filter_map(|&(input_loc, w)| {
+                    if !input_loc.is_hidden() {
+                        return Some((input_loc, w));
+                    }
+
+                    if input_loc.unwrap() == index {
+                        return None;
+                    }
+
+                    if input_loc.unwrap() > index {
+                        return Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w));
+                    }
+
+                    Some((input_loc, w))
+                })
+                .collect();
+        }
+
+        for n2 in &self.output_layer {
+            let mut nw = n2.write().unwrap();
+            nw.inputs = nw
+                .inputs
+                .iter()
+                .filter_map(|&(input_loc, w)| {
+                    if !input_loc.is_hidden() {
+                        return Some((input_loc, w));
+                    }
+
+                    if input_loc.unwrap() == index {
+                        return None;
+                    }
+
+                    if input_loc.unwrap() > index {
+                        return Some((NeuronLocation::Hidden(input_loc.unwrap() - 1), w));
+                    }
+
+                    Some((input_loc, w))
+                })
+                .collect();
+        }
+
+        neuron.into_inner().unwrap()
     }
 }
 
@@ -163,27 +290,35 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let (loc, w) = n2.inputs.remove(i);
 
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
-                self.hidden_layers
-                    .push(Arc::new(RwLock::new(NeuronTopology::new(vec![loc], rng)))); // for some reason, this isn't actually doing anything once it goes to the next scope
+
+                let n3 = NeuronTopology::new(vec![loc], rng);
+
+                self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
                 n2.inputs.insert(i, (loc3, w));
             }
 
             if rng.gen::<f32>() <= rate {
                 // add a connection
-                let (mut n1, mut loc1) = self.rand_neuron(rng);
+                let (_, mut loc1) = self.rand_neuron(rng);
+                let (_, mut loc2) = self.rand_neuron(rng);
 
-                while n1.read().unwrap().inputs.is_empty() {
-                    (n1, loc1) = self.rand_neuron(rng);
+                while loc1.is_output() || !self.add_connection(loc1, loc2, rng.gen::<f32>()) {
+                    (_, loc1) = self.rand_neuron(rng);
+                    (_, loc2) = self.rand_neuron(rng);
+                }
+            }
+
+            if rng.gen::<f32>() <= rate && !self.hidden_layers.is_empty() {
+                // remove a neuron
+                let (_, mut loc) = self.rand_neuron(rng);
+
+                while !loc.is_hidden() {
+                    (_, loc) = self.rand_neuron(rng);
                 }
 
-                let (mut n2, mut loc2) = self.rand_neuron(rng);
-
-                while self.is_connection_cyclic(loc1, loc2) {
-                    (n2, loc2) = self.rand_neuron(rng);
-                }
-
-                n2.write().unwrap().inputs.push((loc1, rng.gen()));
+                // delete the neuron
+                self.delete_neuron(loc);
             }
 
             if rng.gen::<f32>() <= rate {
@@ -199,6 +334,34 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
                 let (_, w) = &mut n.inputs[i];
                 *w += rng.gen_range(-1.0..1.0) * rate;
             }
+
+            if rng.gen::<f32>() <= rate {
+                // mutate bias
+                let (n, _) = self.rand_neuron(rng);
+                let mut n = n.write().unwrap();
+
+                n.bias += rng.gen_range(-1.0..1.0) * rate;
+            }
+
+            if rng.gen::<f32>() <= rate && !self.hidden_layers.is_empty() {
+                // mutate activation function
+                let activations = activation_fn! {
+                    sigmoid,
+                    relu,
+                    f32::tanh
+                };
+
+                let (mut n, mut loc) = self.rand_neuron(rng);
+
+                while !loc.is_hidden() {
+                    (n, loc) = self.rand_neuron(rng);
+                }
+
+                let mut nw = n.write().unwrap();
+
+                // should probably not clone, but its not a huge efficiency issue anyways
+                nw.activation = activations[rng.gen_range(0..activations.len())].clone();
+            }
         }
     }
 }
@@ -211,11 +374,42 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
     }
 }
 
+/*
 #[cfg(feature = "crossover")]
 impl CrossoverReproduction for NeuralNetworkTopology {
     fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         todo!();
     }
+}
+*/
+
+/// An activation function object that implements [`fmt::Debug`] and is [`Send`]
+#[derive(Clone)]
+pub struct ActivationFn {
+    /// The actual activation function.
+    pub func: Arc<dyn Fn(f32) -> f32 + Send + Sync + 'static>,
+    name: String,
+}
+
+impl fmt::Debug for ActivationFn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{}", self.name)
+    }
+}
+
+/// The sigmoid activation function.
+pub fn sigmoid(n: f32) -> f32 {
+    1. / (1. + std::f32::consts::E.powf(-n))
+}
+
+/// The ReLU activation function.
+pub fn relu(n: f32) -> f32 {
+    n.max(0.)
+}
+
+/// Activation function that does nothing.
+pub fn linear_activation(n: f32) -> f32 {
+    n
 }
 
 /// A stateless version of [`Neuron`][crate::Neuron].
@@ -226,22 +420,59 @@ pub struct NeuronTopology {
 
     /// The neuron's bias.
     pub bias: f32,
+
+    /// The neuron's activation function.
+    pub activation: ActivationFn,
 }
 
 impl NeuronTopology {
     /// Creates a new neuron with the given input locations.
     pub fn new(inputs: Vec<NeuronLocation>, rng: &mut impl Rng) -> Self {
-        let inputs = inputs.into_iter().map(|i| (i, rng.gen::<f32>())).collect();
+        let activations = activation_fn! {
+            sigmoid,
+            relu,
+            f32::tanh
+        };
+
+        Self::new_with_activations(inputs, activations, rng)
+    }
+
+    /// Takes a collection of activation functions and chooses a random one to use.
+    pub fn new_with_activations(
+        inputs: Vec<NeuronLocation>,
+        activations: impl IntoIterator<Item = ActivationFn>,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let mut activations: Vec<_> = activations.into_iter().collect();
+
+        Self::new_with_activation(
+            inputs,
+            activations.remove(rng.gen_range(0..activations.len())),
+            rng,
+        )
+    }
+
+    /// Creates a neuron with the activation.
+    pub fn new_with_activation(
+        inputs: Vec<NeuronLocation>,
+        activation: ActivationFn,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let inputs = inputs
+            .into_iter()
+            .map(|i| (i, rng.gen_range(-1.0..1.0)))
+            .collect();
 
         Self {
             inputs,
             bias: rng.gen(),
+            activation,
         }
     }
 }
 
 /// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NeuronLocation {
     /// Points to a neuron in the input layer at contained index.
     Input(usize),
