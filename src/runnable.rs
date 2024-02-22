@@ -8,7 +8,7 @@ use rayon::prelude::*;
 #[cfg(feature = "rayon")]
 use std::sync::{Arc, RwLock};
 
-/// A runnable, stated Neural Network generated from a [NeuralNetworkToplogy]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
+/// A runnable, stated Neural Network generated from a [NeuralNetworkTopology]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
 /// Because this has state, you need to run [`NeuralNetwork::flush_state`] between [`NeuralNetwork::predict`] calls.
 #[derive(Debug)]
 #[cfg(not(feature = "rayon"))]
