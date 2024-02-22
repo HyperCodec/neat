@@ -7,6 +7,7 @@ Implementation of the NEAT algorithm using `genetic-rs`
 
 ### Features
 - rayon - Uses parallelization on the `NeuralNetwork` struct and adds the `rayon` feature to the `genetic-rs` re-export.
+- serde - Adds the NNTSerde struct and allows for serialization of `NeuralNetworkTopology`
 
 ### How To Use
 When working with this crate, you'll want to use the `NeuralNetworkTopology` struct in your agent's DNA and
