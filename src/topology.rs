@@ -21,15 +21,15 @@ pub mod nnt_serde {
     #[derive(Serialize, Deserialize)]
     pub struct NNTSerde<const I: usize, const O: usize> {
         #[serde(with = "BigArray")]
-        input_layer: [NeuronTopology; I],
+        pub(crate) input_layer: [NeuronTopology; I],
 
-        hidden_layers: Vec<NeuronTopology>,
+        pub(crate) hidden_layers: Vec<NeuronTopology>,
 
         #[serde(with = "BigArray")]
-        output_layer: [NeuronTopology; O],
+        pub(crate) output_layer: [NeuronTopology; O],
 
-        mutation_rate: f32,
-        mutation_passes: usize,
+        pub(crate) mutation_rate: f32,
+        pub(crate) mutation_passes: usize,
     }
 
     impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
@@ -59,37 +59,6 @@ pub mod nnt_serde {
                 output_layer,
                 mutation_rate: value.mutation_rate,
                 mutation_passes: value.mutation_passes,
-            }
-        }
-    }
-
-    impl<const I: usize, const O: usize> Into<NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
-        fn into(self) -> NeuralNetworkTopology<I, O> {
-            let input_layer = self.input_layer
-                .into_iter()
-                .map(|n| Arc::new(RwLock::new(n)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            let hidden_layers = self.hidden_layers
-                .into_iter()
-                .map(|n| Arc::new(RwLock::new(n)))
-                .collect();
-
-            let output_layer = self.output_layer
-                .into_iter()
-                .map(|n| Arc::new(RwLock::new(n)))
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            NeuralNetworkTopology {
-                input_layer,
-                hidden_layers,
-                output_layer,
-                mutation_rate: self.mutation_rate,
-                mutation_passes: self.mutation_passes,
             }
         }
     }
@@ -481,14 +450,38 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
     }
 }
 
-/*
-#[cfg(feature = "crossover")]
-impl CrossoverReproduction for NeuralNetworkTopology {
-    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
-        todo!();
+#[cfg(feature = "serde")]
+impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>> for NeuralNetworkTopology<I, O> {
+    fn from(value: nnt_serde::NNTSerde<I, O>) -> Self {
+        let input_layer = value.input_layer
+            .into_iter()
+            .map(|n| Arc::new(RwLock::new(n)))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let hidden_layers = value.hidden_layers
+            .into_iter()
+            .map(|n| Arc::new(RwLock::new(n)))
+            .collect();
+
+        let output_layer = value.output_layer
+            .into_iter()
+            .map(|n| Arc::new(RwLock::new(n)))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        NeuralNetworkTopology {
+            input_layer,
+            hidden_layers,
+            output_layer,
+            mutation_rate: value.mutation_rate,
+            mutation_passes: value.mutation_passes,
+        }
     }
 }
-*/
+
 
 /// An activation function object that implements [`fmt::Debug`] and is [`Send`]
 #[derive(Clone)]
