@@ -11,11 +11,15 @@ keywords = ["genetic", "machine-learning", "ai", "algorithm", "evolution"]
 categories = ["algorithms", "science", "simulation"]
 license = "MIT"
 
+[package.metadata.docs.rs]
+features = ["serde"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
 default = ["max-index"]
-crossover = ["genetic-rs/crossover"]
+#crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
 max-index = []
 serde = ["dep:serde", "dep:serde-big-array"]
