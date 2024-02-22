@@ -104,7 +104,7 @@ pub mod nnt_serde {
         let encoded = bincode::serialize(&nnts).unwrap();
 
         if let Some(_) = option_env!("TEST_CREATEFILE") {
-            std::fs::write("serde-test.nn", encoded).unwrap();
+            std::fs::write("serde-test.nn", &encoded).unwrap();
         }
 
         let decoded: NNTSerde<10, 10> = bincode::deserialize(&encoded).unwrap();
@@ -521,7 +521,8 @@ impl<'a> Deserialize<'a> for ActivationFn {
         let activations = activation_fn! {
             sigmoid,
             relu,
-            f32::tanh
+            f32::tanh,
+            linear_activation
         };
 
         for a in activations {
