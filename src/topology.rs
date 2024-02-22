@@ -7,6 +7,111 @@ use std::{
 use genetic_rs::prelude::*;
 use rand::prelude::*;
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Serializer, Deserialize, Deserializer};
+
+#[cfg(feature = "serde")]
+pub mod nnt_serde {
+    use super::*;
+    use serde::{Serialize, Deserialize};
+    use serde_big_array::BigArray;
+
+    #[derive(Serialize, Deserialize)]
+    pub struct NNTSerde<const I: usize, const O: usize> {
+        #[serde(with = "BigArray")]
+        input_layer: [NeuronTopology; I],
+
+        hidden_layers: Vec<NeuronTopology>,
+
+        #[serde(with = "BigArray")]
+        output_layer: [NeuronTopology; O],
+
+        mutation_rate: f32,
+        mutation_passes: usize,
+    }
+
+    impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
+        fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
+            let input_layer = value.input_layer
+                .iter()
+                .map(|n| n.read().unwrap().clone())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            let hidden_layers = value.hidden_layers
+                .iter()
+                .map(|n| n.read().unwrap().clone())
+                .collect();
+
+            let output_layer = value.output_layer
+                .iter()
+                .map(|n| n.read().unwrap().clone())
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            Self {
+                input_layer,
+                hidden_layers,
+                output_layer,
+                mutation_rate: value.mutation_rate,
+                mutation_passes: value.mutation_passes,
+            }
+        }
+    }
+
+    impl<const I: usize, const O: usize> Into<NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
+        fn into(self) -> NeuralNetworkTopology<I, O> {
+            let input_layer = self.input_layer
+                .into_iter()
+                .map(|n| Arc::new(RwLock::new(n)))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            let hidden_layers = self.hidden_layers
+                .into_iter()
+                .map(|n| Arc::new(RwLock::new(n)))
+                .collect();
+
+            let output_layer = self.output_layer
+                .into_iter()
+                .map(|n| Arc::new(RwLock::new(n)))
+                .collect::<Vec<_>>()
+                .try_into()
+                .unwrap();
+
+            NeuralNetworkTopology {
+                input_layer,
+                hidden_layers,
+                output_layer,
+                mutation_rate: self.mutation_rate,
+                mutation_passes: self.mutation_passes,
+            }
+        }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn serde() {
+        let mut rng = rand::thread_rng();
+        let nnt = NeuralNetworkTopology::<10, 10>::new(0.1, 3, &mut rng);
+        let nnts = NNTSerde::from(&nnt);
+
+        let encoded = bincode::serialize(&nnts).unwrap();
+
+        if let Some(_) = option_env!("TEST_CREATEFILE") {
+            std::fs::write("serde-test.nn", encoded).unwrap();
+        }
+
+        let decoded: NNTSerde<10, 10> = bincode::deserialize(&encoded).unwrap();
+        let nnt2: NeuralNetworkTopology<10, 10> = decoded.into();
+
+        dbg!(nnt, nnt2);
+    }
+}
+
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
 macro_rules! activation_fn {
@@ -397,6 +502,37 @@ impl fmt::Debug for ActivationFn {
     }
 }
 
+#[cfg(feature = "serde")]
+impl Serialize for ActivationFn {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.name)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'a> Deserialize<'a> for ActivationFn {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'a>
+    {
+        let name = String::deserialize(deserializer)?;
+        let activations = activation_fn! {
+            sigmoid,
+            relu,
+            f32::tanh
+        };
+
+        for a in activations {
+            if a.name == name {
+                return Ok(a);
+            }
+        }
+
+        // eventually will make an activation fn registry of sorts.
+        panic!("Custom activation functions currently not supported.") // TODO return error instead of raw panic
+    }
+}
+
 /// The sigmoid activation function.
 pub fn sigmoid(n: f32) -> f32 {
     1. / (1. + std::f32::consts::E.powf(-n))
@@ -414,6 +550,7 @@ pub fn linear_activation(n: f32) -> f32 {
 
 /// A stateless version of [`Neuron`][crate::Neuron].
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuronTopology {
     /// The input locations and weights.
     pub inputs: Vec<(NeuronLocation, f32)>,
@@ -473,6 +610,7 @@ impl NeuronTopology {
 
 /// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
 #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NeuronLocation {
     /// Points to a neuron in the input layer at contained index.
     Input(usize),

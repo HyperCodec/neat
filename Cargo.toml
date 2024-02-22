@@ -18,9 +18,15 @@ default = ["max-index"]
 crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
 max-index = []
+serde = ["dep:serde", "dep:serde-big-array"]
 
 
 [dependencies]
 genetic-rs = "0.3"
 rand = "0.8.5"
 rayon = { version = "1.8.1", optional = true }
+serde = { version = "1.0.197", features = ["derive"], optional = true }
+serde-big-array = { version = "0.5.1", optional = true }
+
+[dev-dependencies]
+bincode = "1.3.3"
