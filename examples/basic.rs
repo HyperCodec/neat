@@ -15,7 +15,7 @@ impl RandomlyMutable for AgentDNA {
 impl Prunable for AgentDNA {}
 
 impl DivisionReproduction for AgentDNA {
-    fn spawn_child(&self, rng: &mut impl Rng) -> Self {
+    fn divide(&self, rng: &mut impl Rng) -> Self {
         let mut child = self.clone();
         child.mutate(self.network.mutation_rate, rng);
         child
@@ -112,7 +112,7 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
@@ -130,7 +130,7 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.entities.iter().map(fitness).collect();
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
     let maxfit = fits
         .iter()
