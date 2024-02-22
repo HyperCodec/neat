@@ -10,12 +10,14 @@ use rand::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
+/// Contains useful structs for serializing/deserializing a [`NeuronTopology`]
 #[cfg(feature = "serde")]
 pub mod nnt_serde {
     use super::*;
     use serde::{Serialize, Deserialize};
     use serde_big_array::BigArray;
 
+    /// A serializable wrapper for [`NeuronToplogy`]. See [`NNTSerde::from`] for conversion.
     #[derive(Serialize, Deserialize)]
     pub struct NNTSerde<const I: usize, const O: usize> {
         #[serde(with = "BigArray")]
