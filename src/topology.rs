@@ -8,13 +8,13 @@ use genetic_rs::prelude::*;
 use rand::prelude::*;
 
 #[cfg(feature = "serde")]
-use serde::{Serialize, Serializer, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Contains useful structs for serializing/deserializing a [`NeuronTopology`]
 #[cfg(feature = "serde")]
 pub mod nnt_serde {
     use super::*;
-    use serde::{Serialize, Deserialize};
+    use serde::{Deserialize, Serialize};
     use serde_big_array::BigArray;
 
     /// A serializable wrapper for [`NeuronToplogy`]. See [`NNTSerde::from`] for conversion.
@@ -34,19 +34,22 @@ pub mod nnt_serde {
 
     impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
         fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
-            let input_layer = value.input_layer
+            let input_layer = value
+                .input_layer
                 .iter()
                 .map(|n| n.read().unwrap().clone())
                 .collect::<Vec<_>>()
                 .try_into()
                 .unwrap();
 
-            let hidden_layers = value.hidden_layers
+            let hidden_layers = value
+                .hidden_layers
                 .iter()
                 .map(|n| n.read().unwrap().clone())
                 .collect();
 
-            let output_layer = value.output_layer
+            let output_layer = value
+                .output_layer
                 .iter()
                 .map(|n| n.read().unwrap().clone())
                 .collect::<Vec<_>>()
@@ -451,21 +454,26 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
 }
 
 #[cfg(feature = "serde")]
-impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>> for NeuralNetworkTopology<I, O> {
+impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
+    for NeuralNetworkTopology<I, O>
+{
     fn from(value: nnt_serde::NNTSerde<I, O>) -> Self {
-        let input_layer = value.input_layer
+        let input_layer = value
+            .input_layer
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let hidden_layers = value.hidden_layers
+        let hidden_layers = value
+            .hidden_layers
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect();
 
-        let output_layer = value.output_layer
+        let output_layer = value
+            .output_layer
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect::<Vec<_>>()
@@ -481,7 +489,6 @@ impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>> for NeuralN
         }
     }
 }
-
 
 /// An activation function object that implements [`fmt::Debug`] and is [`Send`]
 #[derive(Clone)]
@@ -508,7 +515,7 @@ impl Serialize for ActivationFn {
 impl<'a> Deserialize<'a> for ActivationFn {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'a>
+        D: Deserializer<'a>,
     {
         let name = String::deserialize(deserializer)?;
         let activations = activation_fn! {
