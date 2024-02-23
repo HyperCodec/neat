@@ -1,7 +1,9 @@
+//! A basic example of NEAT with this crate. Enable the `crossover` feature for it to use crossover reproduction
+
 use neat::*;
 use rand::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct AgentDNA {
     network: NeuralNetworkTopology<2, 4>,
 }
@@ -19,6 +21,15 @@ impl DivisionReproduction for AgentDNA {
         let mut child = self.clone();
         child.mutate(self.network.mutation_rate, rng);
         child
+    }
+}
+
+#[cfg(feature = "crossover")]
+impl CrossoverReproduction for AgentDNA {
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
+        Self {
+            network: self.network.crossover(&other.network, rng),
+        }
     }
 }
 
@@ -98,7 +109,7 @@ fn fitness(dna: &AgentDNA) -> f32 {
     fitness
 }
 
-#[cfg(not(feature = "rayon"))]
+#[cfg(all(not(feature = "crossover"), not(feature = "rayon")))]
 fn main() {
     let mut rng = rand::thread_rng();
 
@@ -122,9 +133,51 @@ fn main() {
     dbg!(&fits, maxfit);
 }
 
-#[cfg(feature = "rayon")]
+#[cfg(all(not(feature = "crossover"), feature = "rayon"))]
 fn main() {
     let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, division_pruning_nextgen);
+
+    for _ in 0..100 {
+        sim.next_generation();
+    }
+
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+
+    let maxfit = fits
+        .iter()
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    dbg!(&fits, maxfit);
+}
+
+#[cfg(all(feature = "crossover", not(feature = "rayon")))]
+fn main() {
+    let mut rng = rand::thread_rng();
+
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(&mut rng, 100),
+        fitness,
+        crossover_pruning_nextgen,
+    );
+
+    for _ in 0..100 {
+        sim.next_generation();
+    }
+
+    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+
+    let maxfit = fits
+        .iter()
+        .max_by(|a, b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    dbg!(&fits, maxfit);
+}
+
+#[cfg(all(feature = "crossover", feature = "rayon"))]
+fn main() {
+    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, crossover_pruning_nextgen);
 
     for _ in 0..100 {
         sim.next_generation();
