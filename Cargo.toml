@@ -34,8 +34,3 @@ serde-big-array = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
 bincode = "1.3.3"
-
-
-[[example]]
-name = "crossover"
-required-features = ["crossover"]
