@@ -3,7 +3,7 @@
 use neat::*;
 use rand::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct AgentDNA {
     network: NeuralNetworkTopology<2, 4>,
 }
@@ -151,7 +151,7 @@ fn main() {
     dbg!(&fits, maxfit);
 }
 
-#[cfg(all(eature = "crossover", not(feature = "rayon")))]
+#[cfg(all(feature = "crossover", not(feature = "rayon")))]
 fn main() {
     let mut rng = rand::thread_rng();
 
