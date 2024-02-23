@@ -28,7 +28,7 @@ impl DivisionReproduction for AgentDNA {
 impl CrossoverReproduction for AgentDNA {
     fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         Self {
-            network: self.network.crossover(&other.network, rng)
+            network: self.network.crossover(&other.network, rng),
         }
     }
 }
