@@ -2,11 +2,13 @@
 //! ### Feature Roadmap:
 //! - [x] base (single-core) crate
 //! - [x] rayon
+//! - [x] serde
 //! - [ ] crossover
 //!
 //! You can get started by looking at [genetic-rs docs](https://docs.rs/genetic-rs) and checking the examples for this crate.
 
 #![warn(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 /// A module containing the [`NeuralNetworkTopology`] struct. This is what you want to use in the DNA of your agent, as it is the thing that goes through nextgens and suppors mutation.
 pub mod topology;
@@ -18,3 +20,6 @@ pub mod runnable;
 pub use genetic_rs::prelude::*;
 pub use runnable::*;
 pub use topology::*;
+
+#[cfg(feature = "serde")]
+pub use nnt_serde::*;
