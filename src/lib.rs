@@ -3,7 +3,7 @@
 //! - [x] base (single-core) crate
 //! - [x] rayon
 //! - [x] serde
-//! - [ ] crossover
+//! - [x] crossover
 //!
 //! You can get started by looking at [genetic-rs docs](https://docs.rs/genetic-rs) and checking the examples for this crate.
 

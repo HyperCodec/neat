@@ -454,6 +454,36 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
     }
 }
 
+impl<const I: usize, const O: usize> PartialEq for NeuralNetworkTopology<I, O> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.mutation_rate != other.mutation_rate
+            || self.mutation_passes != other.mutation_passes
+        {
+            return false;
+        }
+
+        for i in 0..I {
+            if *self.input_layer[i].read().unwrap() != *other.input_layer[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        for i in 0..self.hidden_layers.len().min(other.hidden_layers.len()) {
+            if *self.hidden_layers[i].read().unwrap() != *other.hidden_layers[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        for i in 0..O {
+            if *self.output_layer[i].read().unwrap() != *other.output_layer[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
 #[cfg(feature = "serde")]
 impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
     for NeuralNetworkTopology<I, O>
@@ -491,6 +521,93 @@ impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
     }
 }
 
+#[cfg(feature = "crossover")]
+impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopology<I, O> {
+    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+        let input_layer = self
+            .input_layer
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let mut hidden_layers =
+            Vec::with_capacity(self.hidden_layers.len().max(other.hidden_layers.len()));
+
+        for i in 0..hidden_layers.len() {
+            if rng.gen::<f32>() <= 0.5 {
+                if let Some(n) = self.hidden_layers.get(i) {
+                    let mut n = n.read().unwrap().clone();
+
+                    n.inputs
+                        .retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
+                    hidden_layers[i] = Arc::new(RwLock::new(n));
+
+                    continue;
+                }
+            }
+
+            let mut n = other.hidden_layers[i].read().unwrap().clone();
+
+            n.inputs
+                .retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
+            hidden_layers[i] = Arc::new(RwLock::new(n));
+        }
+
+        let mut output_layer: [Arc<RwLock<NeuronTopology>>; O] = self
+            .output_layer
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        for (i, n) in self.output_layer.iter().enumerate() {
+            if rng.gen::<f32>() <= 0.5 {
+                let mut n = n.read().unwrap().clone();
+
+                n.inputs
+                    .retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
+                output_layer[i] = Arc::new(RwLock::new(n));
+
+                continue;
+            }
+
+            let mut n = other.output_layer[i].read().unwrap().clone();
+
+            n.inputs
+                .retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
+            output_layer[i] = Arc::new(RwLock::new(n));
+        }
+
+        let mut child = Self {
+            input_layer,
+            hidden_layers,
+            output_layer,
+            mutation_rate: self.mutation_rate,
+            mutation_passes: self.mutation_passes,
+        };
+
+        child.mutate(self.mutation_rate, rng);
+
+        child
+    }
+}
+
+#[cfg(feature = "crossover")]
+fn input_exists<const I: usize>(
+    loc: NeuronLocation,
+    input: &[Arc<RwLock<NeuronTopology>>; I],
+    hidden: &[Arc<RwLock<NeuronTopology>>],
+) -> bool {
+    match loc {
+        NeuronLocation::Input(i) => i < input.len(),
+        NeuronLocation::Hidden(i) => i < hidden.len(),
+        NeuronLocation::Output(_) => false,
+    }
+}
+
 /// An activation function object that implements [`fmt::Debug`] and is [`Send`]
 #[derive(Clone)]
 pub struct ActivationFn {
@@ -502,6 +619,12 @@ pub struct ActivationFn {
 impl fmt::Debug for ActivationFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "{}", self.name)
+    }
+}
+
+impl PartialEq for ActivationFn {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
     }
 }
 
@@ -553,7 +676,7 @@ pub fn linear_activation(n: f32) -> f32 {
 }
 
 /// A stateless version of [`Neuron`][crate::Neuron].
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuronTopology {
     /// The input locations and weights.
