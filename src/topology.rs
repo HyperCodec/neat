@@ -534,10 +534,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
                 if let Some(n) = self.hidden_layers.get(i) {
                     let mut n = n.read().unwrap().clone();
 
-                    n.inputs = n.inputs
-                        .into_iter()
-                        .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
-                        .collect();
+                    n.inputs.retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
                     hidden_layers[i] = Arc::new(RwLock::new(n));
 
                     continue;
@@ -546,10 +543,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
 
             let mut n = other.hidden_layers[i].read().unwrap().clone();
             
-            n.inputs = n.inputs
-                .into_iter()
-                .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
-                .collect();
+            n.inputs.retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
             hidden_layers[i] = Arc::new(RwLock::new(n));
         }
 
@@ -560,14 +554,11 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
             .try_into()
             .unwrap();
 
-        for i in 0..O {
+        for (i, n) in self.output_layer.iter().enumerate() {
             if rng.gen::<f32>() <= 0.5 {
-                let mut n = self.output_layer[i].read().unwrap().clone();
+                let mut n = n.read().unwrap().clone();
                 
-                n.inputs = n.inputs
-                    .into_iter()
-                    .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
-                    .collect();
+                n.inputs.retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
                 output_layer[i] = Arc::new(RwLock::new(n));
 
                 continue;
@@ -575,10 +566,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
 
             let mut n = other.output_layer[i].read().unwrap().clone();
                 
-            n.inputs = n.inputs
-                .into_iter()
-                .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
-                .collect();
+            n.inputs.retain(|(l, _)| input_exists(*l, &input_layer, &hidden_layers));
             output_layer[i] = Arc::new(RwLock::new(n));
         }
 
