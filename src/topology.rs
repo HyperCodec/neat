@@ -523,7 +523,6 @@ impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
 
 #[cfg(feature = "crossover")]
 impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopology<I, O> {
-    // TODO deal with cyclic connection hell
     fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
         let input_layer = self
             .input_layer
