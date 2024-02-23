@@ -1,9 +1,9 @@
-//! A basic example of NEAT division reproduction with this crate.
+//! Essentially the same as the `basic` example, but it uses crossover reproduction instead of division reproduction.
 
 use neat::*;
 use rand::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct AgentDNA {
     network: NeuralNetworkTopology<2, 4>,
 }
@@ -16,11 +16,11 @@ impl RandomlyMutable for AgentDNA {
 
 impl Prunable for AgentDNA {}
 
-impl DivisionReproduction for AgentDNA {
-    fn divide(&self, rng: &mut impl Rng) -> Self {
-        let mut child = self.clone();
-        child.mutate(self.network.mutation_rate, rng);
-        child
+impl CrossoverReproduction for AgentDNA {
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
+        Self {
+            network: self.network.crossover(&other.network, rng)
+        }
     }
 }
 
@@ -107,7 +107,7 @@ fn main() {
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 100),
         fitness,
-        division_pruning_nextgen,
+        crossover_pruning_nextgen,
     );
 
     for _ in 0..100 {
@@ -126,7 +126,7 @@ fn main() {
 
 #[cfg(feature = "rayon")]
 fn main() {
-    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, division_pruning_nextgen);
+    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, crossover_pruning_nextgen);
 
     for _ in 0..100 {
         sim.next_generation();

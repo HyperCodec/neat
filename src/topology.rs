@@ -454,6 +454,34 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetworkTopol
     }
 }
 
+impl<const I: usize, const O: usize> PartialEq for NeuralNetworkTopology<I, O> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.mutation_rate != other.mutation_rate || self.mutation_passes != other.mutation_passes {
+            return false;
+        }
+
+        for i in 0..I {
+            if *self.input_layer[i].read().unwrap() != *other.input_layer[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        for i in 0..self.hidden_layers.len().min(other.hidden_layers.len()) {
+            if *self.hidden_layers[i].read().unwrap() != *other.hidden_layers[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        for i in 0..O {
+            if *self.output_layer[i].read().unwrap() != *other.output_layer[i].read().unwrap() {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
 #[cfg(feature = "serde")]
 impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
     for NeuralNetworkTopology<I, O>
@@ -595,6 +623,12 @@ impl fmt::Debug for ActivationFn {
     }
 }
 
+impl PartialEq for ActivationFn {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
 #[cfg(feature = "serde")]
 impl Serialize for ActivationFn {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -643,7 +677,7 @@ pub fn linear_activation(n: f32) -> f32 {
 }
 
 /// A stateless version of [`Neuron`][crate::Neuron].
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuronTopology {
     /// The input locations and weights.
