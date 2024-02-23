@@ -459,22 +459,19 @@ impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
     for NeuralNetworkTopology<I, O>
 {
     fn from(value: nnt_serde::NNTSerde<I, O>) -> Self {
-        let input_layer = value
-            .input_layer
+        let input_layer = value.input_layer
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
 
-        let hidden_layers = value
-            .hidden_layers
+        let hidden_layers = value.hidden_layers
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect();
 
-        let output_layer = value
-            .output_layer
+        let output_layer = value.output_layer
             .into_iter()
             .map(|n| Arc::new(RwLock::new(n)))
             .collect::<Vec<_>>()
@@ -496,7 +493,8 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
     // TODO deal with cyclic connection hell
     fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
         let input_layer = self.input_layer
-            .map(|n| n.read().unwrap().clone())
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
             .collect::<Vec<_>>()
             .try_into()
             .unwrap();
@@ -510,24 +508,29 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
 
                     n.inputs = n.inputs
                         .into_iter()
-                        .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                        .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
                         .collect();
-                    hidden_layers[i] = n;
+                    hidden_layers[i] = Arc::new(RwLock::new(n));
 
                     continue;
                 }
             }
 
-            let mut n = other.hidden_layers[i];
+            let mut n = other.hidden_layers[i].read().unwrap().clone();
             
             n.inputs = n.inputs
                 .into_iter()
-                .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
                 .collect();
-            hidden_layers[i] = n;
+            hidden_layers[i] = Arc::new(RwLock::new(n));
         }
 
-        let mut output_layer = self.output_layer;
+        let mut output_layer: [Arc<RwLock<NeuronTopology>>; O] = self.output_layer
+            .iter()
+            .map(|n| Arc::new(RwLock::new(n.read().unwrap().clone())))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
 
         for i in 0..O {
             if rng.gen::<f32>() <= 0.5 {
@@ -535,9 +538,9 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
                 
                 n.inputs = n.inputs
                     .into_iter()
-                    .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                    .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
                     .collect();
-                output_layer[i] = n;
+                output_layer[i] = Arc::new(RwLock::new(n));
 
                 continue;
             }
@@ -546,9 +549,9 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
                 
             n.inputs = n.inputs
                 .into_iter()
-                .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                .filter(|(l, _)| input_exists(*l, &input_layer, &hidden_layers))
                 .collect();
-            output_layer[i] = n;
+            output_layer[i] = Arc::new(RwLock::new(n));
         }
 
         let mut child = Self {
@@ -559,22 +562,22 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopo
             mutation_passes: self.mutation_passes,
         };
 
-        child.mutate(self.mutation_rate);
+        child.mutate(self.mutation_rate, rng);
 
         child
     }
 }
 
 #[cfg(feature = "crossover")]
-fn input_exists(
+fn input_exists<const I: usize>(
     loc: NeuronLocation,
-    input: &[Arc<RwLock<NeuronTopology>>], 
+    input: &[Arc<RwLock<NeuronTopology>>; I], 
     hidden: &[Arc<RwLock<NeuronTopology>>],
 ) -> bool {
     match loc {
         NeuronLocation::Input(i) => i < input.len(),
         NeuronLocation::Hidden(i) => i < hidden.len(),
-        NueronLocation::Output(_) => false,
+        NeuronLocation::Output(_) => false,
     }
 }
 
