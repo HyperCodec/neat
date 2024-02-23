@@ -8,7 +8,7 @@ use rayon::prelude::*;
 #[cfg(feature = "rayon")]
 use std::sync::{Arc, RwLock};
 
-/// A runnable, stated Neural Network generated from a [NeuralNetworkToplogy]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
+/// A runnable, stated Neural Network generated from a [NeuralNetworkTopology]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
 /// Because this has state, you need to run [`NeuralNetwork::flush_state`] between [`NeuralNetwork::predict`] calls.
 #[derive(Debug)]
 #[cfg(not(feature = "rayon"))]
@@ -82,7 +82,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             n.state.value += self.process_neuron(l) * w;
         }
 
-        n.sigmoid();
+        n.activate();
 
         n.state.value
     }
@@ -112,7 +112,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let mut nw = n.write().unwrap();
         nw.state.value += val;
-        nw.sigmoid();
+        nw.activate();
 
         nw.state.value
     }
@@ -240,6 +240,9 @@ pub struct Neuron {
 
     /// The current state of the neuron.
     pub state: NeuronState,
+
+    /// The neuron's activation function
+    pub activation: ActivationFn,
 }
 
 impl Neuron {
@@ -248,9 +251,9 @@ impl Neuron {
         self.state.value = self.bias;
     }
 
-    /// Applies the sigoid activation function to the state's current value.
-    pub fn sigmoid(&mut self) {
-        self.state.value = 1. / (1. + std::f32::consts::E.powf(-self.state.value))
+    /// Applies the activation function to the neuron
+    pub fn activate(&mut self) {
+        self.state.value = (self.activation.func)(self.state.value);
     }
 }
 
@@ -263,6 +266,7 @@ impl From<&NeuronTopology> for Neuron {
                 value: value.bias,
                 ..Default::default()
             },
+            activation: value.activation.clone(),
         }
     }
 }
