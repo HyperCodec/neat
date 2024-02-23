@@ -258,7 +258,7 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
                 (self.output_layer[i].clone(), NeuronLocation::Output(i))
             }
         }
-    }
+    } 
 
     fn delete_neuron(&mut self, loc: NeuronLocation) -> NeuronTopology {
         if !loc.is_hidden() {
@@ -488,6 +488,93 @@ impl<const I: usize, const O: usize> From<nnt_serde::NNTSerde<I, O>>
             mutation_rate: value.mutation_rate,
             mutation_passes: value.mutation_passes,
         }
+    }
+}
+
+#[cfg(feature = "crossover")]
+impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetworkTopology<I, O> {
+    // TODO deal with cyclic connection hell
+    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+        let input_layer = self.input_layer
+            .map(|n| n.read().unwrap().clone())
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+
+        let mut hidden_layers = Vec::with_capacity(self.hidden_layers.len().max(other.hidden_layers.len()));
+
+        for i in 0..hidden_layers.len() {
+            if rng.gen::<f32>() <= 0.5 {
+                if let Some(n) = self.hidden_layers.get(i) {
+                    let mut n = n.read().unwrap().clone();
+
+                    n.inputs = n.inputs
+                        .into_iter()
+                        .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                        .collect();
+                    hidden_layers[i] = n;
+
+                    continue;
+                }
+            }
+
+            let mut n = other.hidden_layers[i];
+            
+            n.inputs = n.inputs
+                .into_iter()
+                .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                .collect();
+            hidden_layers[i] = n;
+        }
+
+        let mut output_layer = self.output_layer;
+
+        for i in 0..O {
+            if rng.gen::<f32>() <= 0.5 {
+                let mut n = self.output_layer[i].read().unwrap().clone();
+                
+                n.inputs = n.inputs
+                    .into_iter()
+                    .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                    .collect();
+                output_layer[i] = n;
+
+                continue;
+            }
+
+            let mut n = other.output_layer[i].read().unwrap().clone();
+                
+            n.inputs = n.inputs
+                .into_iter()
+                .filter(|(l, _)| input_exists(l, &input_layer, &hidden_layers))
+                .collect();
+            output_layer[i] = n;
+        }
+
+        let mut child = Self {
+            input_layer,
+            hidden_layers,
+            output_layer,
+            mutation_rate: self.mutation_rate,
+            mutation_passes: self.mutation_passes,
+        };
+
+        child.mutate(self.mutation_rate);
+
+        child
+    }
+}
+
+#[cfg(feature = "crossover")]
+fn input_exists(
+    loc: NeuronLocation,
+    input: &[Arc<RwLock<NeuronTopology>>], 
+    hidden: &[Arc<RwLock<NeuronTopology>>],
+) -> bool {
+    match loc {
+        NeuronLocation::Input(i) => i < input.len(),
+        NeuronLocation::Hidden(i) => i < hidden.len(),
+        NueronLocation::Output(_) => false,
     }
 }
 
