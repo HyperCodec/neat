@@ -8,7 +8,7 @@ Implementation of the NEAT algorithm using `genetic-rs`
 ### Features
 - rayon - Uses parallelization on the `NeuralNetwork` struct and adds the `rayon` feature to the `genetic-rs` re-export.
 - serde - Adds the NNTSerde struct and allows for serialization of `NeuralNetworkTopology`
-- crossover - Implements the `CrossoverReproduction` trait on `NeuralNetworkTopology`
+- crossover - Implements the `CrossoverReproduction` trait on `NeuralNetworkTopology` and adds the `crossover` feature to the `genetic-rs re-export.
 
 ### How To Use
 When working with this crate, you'll want to use the `NeuralNetworkTopology` struct in your agent's DNA and
@@ -18,26 +18,10 @@ Here's an example of how one might use this crate:
 ```rust
 use neat::*;
 
-#[derive(Clone)]
+#[derive(Clone, RandomlyMutable, DivisionReproduction)]
 struct MyAgentDNA {
     network: NeuralNetworkTopology<1, 2>,
     other_stuff: Foo,
-}
-
-impl RandomlyMutable for MyAgentDNA {
-    fn mutate(&mut self,  rate: f32, rng: &mut impl rand::Rng) {
-        self.network.mutate(rate, rng);
-        self.other_stuff.mutate(rate, rng);
-    }
-}
-
-impl DivisionReproduction for MyAgentDNA {
-    fn spawn_child(&self, rng: &mut impl rand::Rng) -> Self {
-        Self {
-            network: self.network.spawn_child(rng),
-            // ...
-        }
-    }
 }
 
 impl GenerateRandom for MyAgentDNA {

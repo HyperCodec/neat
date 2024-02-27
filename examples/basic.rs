@@ -3,35 +3,13 @@
 use neat::*;
 use rand::prelude::*;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, DivisionReproduction, RandomlyMutable)]
+#[cfg_attr(feature = "crossover", derive(CrossoverReproduction))]
 struct AgentDNA {
     network: NeuralNetworkTopology<2, 4>,
 }
 
-impl RandomlyMutable for AgentDNA {
-    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
-        self.network.mutate(rate, rng);
-    }
-}
-
 impl Prunable for AgentDNA {}
-
-impl DivisionReproduction for AgentDNA {
-    fn divide(&self, rng: &mut impl Rng) -> Self {
-        let mut child = self.clone();
-        child.mutate(self.network.mutation_rate, rng);
-        child
-    }
-}
-
-#[cfg(feature = "crossover")]
-impl CrossoverReproduction for AgentDNA {
-    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
-        Self {
-            network: self.network.crossover(&other.network, rng),
-        }
-    }
-}
 
 impl GenerateRandom for AgentDNA {
     fn gen_random(rng: &mut impl rand::Rng) -> Self {
