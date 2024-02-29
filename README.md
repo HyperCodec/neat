@@ -89,7 +89,12 @@ fn main() {
     }
 
     // display fitness results
+    let fits: Vec<_> = sim.entities
+        .iter()
+        .map(fitness)
+        .collect();
 
+    dbg!(&fits, fits.iter().max());
 }
 ```
 
