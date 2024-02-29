@@ -143,14 +143,17 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
 
-    let maxfit = fits
-        .iter()
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
+    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
 
-    dbg!(&fits, maxfit);
+    dbg!(&fits);
+
+    if cfg!(feature = "serde") {
+        let intermediate = NNTSerde::from(&fits[0].0.network);
+        let serialized = serde_json::to_string(&intermediate).unwrap();
+        println!("{}", serialized);
+    }
 }
 
 #[cfg(all(feature = "crossover", feature = "rayon"))]
@@ -161,12 +164,15 @@ fn main() {
         sim.next_generation();
     }
 
-    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
 
-    let maxfit = fits
-        .iter()
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
+    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
 
-    dbg!(&fits, maxfit);
+    dbg!(&fits);
+
+    if cfg!(feature = "serde") {
+        let intermediate = NNTSerde::from(&fits[0].0.network);
+        let serialized = serde_json::to_string(&intermediate).unwrap();
+        println!("serialized: {}", serialized);
+    }
 }
