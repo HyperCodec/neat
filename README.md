@@ -23,36 +23,55 @@ use neat::*;
 #[derive(Clone, RandomlyMutable, DivisionReproduction)]
 struct MyAgentDNA {
     network: NeuralNetworkTopology<1, 2>,
-    other_stuff: Foo,
 }
 
 impl GenerateRandom for MyAgentDNA {
     fn gen_random(rng: &mut impl rand::Rng) -> Self {
         Self {
             network: NeuralNetworkTopology::new(0.01, 3, rng),
-            other_stuff: Foo::gen_random(rng),
         }
     }
 }
 
 struct MyAgent {
     network: NeuralNetwork<1, 2>,
-    some_other_state: Bar,
+    // ... other state
 }
 
 impl From<&MyAgentDNA> for MyAgent {
     fn from(value: &MyAgentDNA) -> Self {
         Self {
             network: NeuralNetwork::from(&value.network),
-            some_other_state: Bar::default(),
         }
     }
 }
 
 fn fitness(dna: &MyAgentDNA) -> f32 {
+    // agent will simply try to predict whether a number is greater than 0.5
     let mut agent = MyAgent::from(dna);
+    let mut rng = rand::thread_rng();
+    let mut fitness = 0;
 
-    // ... use agent.network.predict() and agent.network.flush() throughout multiple iterations
+    // use repeated tests to avoid situational bias and some local maximums, overall providing more accurate score
+    for _ in 0..10 {
+        let n = rng.gen::<f32>();
+        let above = n > 0.5;
+
+        let res = agent.network.predict([n]);
+        let resi = res.iter().max_index();
+
+        if resi == 0 ^ above {
+            // agent did not guess correctly, punish slightly (too much will hinder exploration)
+            fitness -= 0.5;
+
+            continue;
+        }
+
+        // agent guessed correctly, they become more fit.
+        fitness += 3.;
+    }
+
+    fitness
 }
 
 fn main() {
@@ -64,7 +83,13 @@ fn main() {
         division_pruning_nextgen,
     );
 
-    // ... simulate generations, etc.
+    // simulate 100 generations
+    for _ in 0..100 {
+        sim.next_generation();
+    }
+
+    // display fitness results
+
 }
 ```
 
