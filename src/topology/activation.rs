@@ -8,10 +8,7 @@ use lazy_static::lazy_static;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn {
-            func: Arc::new($F),
-            name: String::from(stringify!($F)),
-        }
+        ActivationFn::new(Arc::new($F), stringify!($F).into())
     };
 
     {$($F: path),*} => {
@@ -97,6 +94,16 @@ pub struct ActivationFn {
     /// The actual activation function.
     pub func: Arc<dyn Activation + Send + Sync>,
     pub(crate) name: String,
+}
+
+impl ActivationFn {
+    /// Creates a new ActivationFn object.
+    pub fn new(func: Arc<dyn Activation + Send + Sync>, name: String) -> Self {
+        Self {
+            func,
+            name,
+        }
+    }
 }
 
 impl fmt::Debug for ActivationFn {

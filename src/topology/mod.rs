@@ -35,7 +35,7 @@ pub struct NeuralNetworkTopology<const I: usize, const O: usize> {
     /// The output layer of the neural netowrk. Uses a fixed length of `O`.
     pub output_layer: [Arc<RwLock<NeuronTopology>>; O],
 
-    /// The mutation rate used in [`NeuralNetworkTopology::mutate`].
+    /// The mutation rate used in [`NeuralNetworkTopology::mutate`] after crossover/division.
     pub mutation_rate: f32,
 
     /// The number of mutation passes (and thus, maximum number of possible mutations that can occur for each entity in the generation).
