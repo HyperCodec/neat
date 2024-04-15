@@ -608,11 +608,23 @@ fn input_exists<const I: usize>(
     }
 }
 
+/// A trait that represents an activation method.
+pub trait Activation {
+    /// The activation function.
+    fn activate(&self, n: f32) -> f32;
+}
+
+impl<F: Fn(f32) -> f32> Activation for F {
+    fn activate(&self, n: f32) -> f32 {
+        (self)(n)
+    }
+}
+
 /// An activation function object that implements [`fmt::Debug`] and is [`Send`]
 #[derive(Clone)]
 pub struct ActivationFn {
     /// The actual activation function.
-    pub func: Arc<dyn Fn(f32) -> f32 + Send + Sync + 'static>,
+    pub func: Arc<dyn Activation>,
     name: String,
 }
 
