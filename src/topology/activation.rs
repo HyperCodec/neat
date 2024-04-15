@@ -24,10 +24,16 @@ lazy_static! {
     pub(crate) static ref ACTIVATION_REGISTRY: Arc<RwLock<ActivationRegistry>> = Arc::new(RwLock::new(ActivationRegistry::default()));
 }
 
-/// Register an activation function to the registry
+/// Register an activation function to the registry.
 pub fn register_activation(act: ActivationFn) {
     let mut reg = ACTIVATION_REGISTRY.write().unwrap();
     reg.register(act);
+}
+
+/// Registers multiple activation functions to the registry at once.
+pub fn batch_register_activation(acts: impl IntoIterator<Item = ActivationFn>) {
+    let mut reg = ACTIVATION_REGISTRY.write().unwrap();
+    reg.batch_register(acts);
 }
 
 /// A registry of the different possible activation functions.
@@ -40,6 +46,13 @@ impl ActivationRegistry {
     /// Registers an activation function.
     pub fn register(&mut self, activation: ActivationFn) {
         self.fns.insert(activation.name.clone(), activation);
+    }
+
+    /// Registers multiple activation functions at once.
+    pub fn batch_register(&mut self, activations: impl IntoIterator<Item = ActivationFn>) {
+        for act in activations {
+            self.register(act);
+        }
     }
 
     /// Gets a Vec of all the 
@@ -55,14 +68,12 @@ impl Default for ActivationRegistry {
     fn default() -> Self {
         let mut s = Self { fns: HashMap::new() };
 
-        activation_fn! {
+        s.batch_register(activation_fn! {
             sigmoid,
             relu,
             linear_activation,
             f32::tanh
-        }
-            .into_iter()
-            .for_each(|f| s.register(f));
+        });
 
         s
     }
