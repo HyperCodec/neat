@@ -10,7 +10,6 @@ pub use activation::*;
 
 use std::{
     collections::HashSet,
-    fmt,
     sync::{Arc, RwLock},
 };
 
@@ -18,7 +17,7 @@ use genetic_rs::prelude::*;
 use rand::prelude::*;
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::activation_fn;
 

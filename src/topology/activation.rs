@@ -1,4 +1,6 @@
 use std::{fmt, sync::Arc};
+
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// Creates an [`ActivationFn`] object from a function
@@ -33,7 +35,7 @@ impl<F: Fn(f32) -> f32> Activation for F {
 pub struct ActivationFn {
     /// The actual activation function.
     pub func: Arc<dyn Activation>,
-    name: String,
+    pub(crate) name: String,
 }
 
 impl fmt::Debug for ActivationFn {
