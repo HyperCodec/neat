@@ -60,6 +60,16 @@ impl ActivationRegistry {
             .map(|v| v.clone())
             .collect()
     }
+
+    /// Gets all activation functions that are valid for a scope.
+    pub fn activations_in_scope(&self, scope: ActivationScope) -> Vec<ActivationFn> {
+        let acts = self.activations();
+
+        acts
+            .into_iter()
+            .filter(|a| scope.contains(a.scope))
+            .collect()
+    }
 }
 
 impl Default for ActivationRegistry {
