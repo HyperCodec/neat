@@ -50,9 +50,9 @@ checksum = "a26ae43d7bcc3b814de94796a5e736d4029efb0ee900c12e2d54c993ad1a1e07"
 
 [[package]]
 name = "genetic-rs"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "355778de2b2da7f1c4c5db9b98bfa94058159ff732b941b01d552cc0004c8610"
+checksum = "b94601f3db2fb341f71a4470134eb1f71d39f54c2fe264122698eda67cd1c91b"
 dependencies = [
  "genetic-rs-common",
  "genetic-rs-macros",
@@ -60,9 +60,9 @@ dependencies = [
 
 [[package]]
 name = "genetic-rs-common"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4583c0a38736e3ae592a0409d341156c414d0385658810de348ceca2c333575b"
+checksum = "4f41b0e3f6ccb66a00e7fc9170d4e02b1ae80c85f03c67b76b067b3637fd314a"
 dependencies = [
  "rand",
  "rayon",
@@ -71,9 +71,9 @@ dependencies = [
 
 [[package]]
 name = "genetic-rs-macros"
-version = "0.4.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dffb2a3f48483f65dd474ffcee8f7d728c6d57c76b9a4279b26febafe5d9027"
+checksum = "2d5ec3b9e69a6836bb0f0c8fa6972e6322e0b49108f7b3ed40769feb452c120a"
 dependencies = [
  "genetic-rs-common",
  "proc-macro2",
