@@ -3,12 +3,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use std::{collections::HashMap, fmt, sync::{Arc, RwLock}};
 use lazy_static::lazy_static;
+use bitflags::bitflags;
 
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(Arc::new($F), stringify!($F).into())
+        ActivationFn::new(Arc::new($F), ActivationScope::default(), stringify!($F).into())
     };
 
     {$($F: path),*} => {
@@ -76,6 +77,27 @@ impl Default for ActivationRegistry {
     }
 }
 
+bitflags! {
+    /// Specifies where an activation function can occur
+    #[derive(Copy, Clone)]
+    pub struct ActivationScope: u8 {
+        /// Whether the activation can be applied to the input layer.
+        const INPUT = 0b001;
+
+        /// Whether the activation can be applied to the hidden layer.
+        const HIDDEN = 0b010;
+
+        /// Whether the activation can be applied to the output layer.
+        const OUTPUT = 0b100;
+    }
+}
+
+impl Default for ActivationScope {
+    fn default() -> Self {
+        Self::HIDDEN
+    }
+}
+
 /// A trait that represents an activation method.
 pub trait Activation {
     /// The activation function.
@@ -93,15 +115,19 @@ impl<F: Fn(f32) -> f32> Activation for F {
 pub struct ActivationFn {
     /// The actual activation function.
     pub func: Arc<dyn Activation + Send + Sync>,
+
+    /// The scope defining where the activation function can appear.
+    pub scope: ActivationScope,
     pub(crate) name: String,
 }
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(func: Arc<dyn Activation + Send + Sync>, name: String) -> Self {
+    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: ActivationScope, name: String) -> Self {
         Self {
             func,
             name,
+            scope,
         }
     }
 }

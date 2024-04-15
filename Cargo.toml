@@ -26,6 +26,7 @@ serde = ["dep:serde", "dep:serde-big-array"]
 
 
 [dependencies]
+bitflags = "2.5.0"
 genetic-rs = { version = "0.5.1", features = ["derive"] }
 lazy_static = "1.4.0"
 rand = "0.8.5"
