@@ -1,7 +1,8 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use std::{fmt, sync::Arc};
+use std::{collections::HashMap, fmt, sync::{Arc, RwLock}};
+use lazy_static::lazy_static;
 
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
@@ -16,6 +17,55 @@ macro_rules! activation_fn {
     {$($F: path),*} => {
         [$(activation_fn!($F)),*]
     };
+}
+
+lazy_static! {
+    /// A static activation registry for use in deserialization.
+    pub(crate) static ref ACTIVATION_REGISTRY: Arc<RwLock<ActivationRegistry>> = Arc::new(RwLock::new(ActivationRegistry::default()));
+}
+
+/// Register an activation function to the registry
+pub fn register_activation(act: ActivationFn) {
+    let mut reg = ACTIVATION_REGISTRY.write().unwrap();
+    reg.register(act);
+}
+
+/// A registry of the different possible activation functions.
+pub struct ActivationRegistry {
+    /// The currently-registered activation functions.
+    pub fns: HashMap<String, ActivationFn>,
+}
+
+impl ActivationRegistry {
+    /// Registers an activation function.
+    pub fn register(&mut self, activation: ActivationFn) {
+        self.fns.insert(activation.name.clone(), activation);
+    }
+
+    /// Gets a Vec of all the 
+    pub fn activations(&self) -> Vec<ActivationFn> {
+        self.fns.values()
+            .into_iter()
+            .map(|v| v.clone())
+            .collect()
+    }
+}
+
+impl Default for ActivationRegistry {
+    fn default() -> Self {
+        let mut s = Self { fns: HashMap::new() };
+
+        activation_fn! {
+            sigmoid,
+            relu,
+            linear_activation,
+            f32::tanh
+        }
+            .into_iter()
+            .for_each(|f| s.register(f));
+
+        s
+    }
 }
 
 /// A trait that represents an activation method.
@@ -64,21 +114,16 @@ impl<'a> Deserialize<'a> for ActivationFn {
         D: Deserializer<'a>,
     {
         let name = String::deserialize(deserializer)?;
-        let activations = activation_fn! {
-            sigmoid,
-            relu,
-            f32::tanh,
-            linear_activation
-        };
 
-        for a in activations {
-            if a.name == name {
-                return Ok(a);
-            }
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+
+        let f = reg.fns.get(&name);
+
+        if f.is_none() {
+            panic!("Activation function {name} not found");
         }
 
-        // eventually will make an activation fn registry of sorts.
-        panic!("Custom activation functions currently not supported.") // TODO return error instead of raw panic
+        Ok(f.unwrap().clone())
     }
 }
 
