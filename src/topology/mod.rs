@@ -1,3 +1,13 @@
+/// Contains useful structs for serializing/deserializing a [`NeuronTopology`]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
+#[cfg(feature = "serde")]
+pub mod nnt_serde;
+
+/// Contains structs and traits used for activation functions.
+pub mod activation;
+
+pub use activation::*;
+
 use std::{
     collections::HashSet,
     fmt,
@@ -10,97 +20,7 @@ use rand::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Contains useful structs for serializing/deserializing a [`NeuronTopology`]
-#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
-#[cfg(feature = "serde")]
-pub mod nnt_serde {
-    use super::*;
-    use serde::{Deserialize, Serialize};
-    use serde_big_array::BigArray;
-
-    /// A serializable wrapper for [`NeuronTopology`]. See [`NNTSerde::from`] for conversion.
-    #[derive(Serialize, Deserialize)]
-    pub struct NNTSerde<const I: usize, const O: usize> {
-        #[serde(with = "BigArray")]
-        pub(crate) input_layer: [NeuronTopology; I],
-
-        pub(crate) hidden_layers: Vec<NeuronTopology>,
-
-        #[serde(with = "BigArray")]
-        pub(crate) output_layer: [NeuronTopology; O],
-
-        pub(crate) mutation_rate: f32,
-        pub(crate) mutation_passes: usize,
-    }
-
-    impl<const I: usize, const O: usize> From<&NeuralNetworkTopology<I, O>> for NNTSerde<I, O> {
-        fn from(value: &NeuralNetworkTopology<I, O>) -> Self {
-            let input_layer = value
-                .input_layer
-                .iter()
-                .map(|n| n.read().unwrap().clone())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            let hidden_layers = value
-                .hidden_layers
-                .iter()
-                .map(|n| n.read().unwrap().clone())
-                .collect();
-
-            let output_layer = value
-                .output_layer
-                .iter()
-                .map(|n| n.read().unwrap().clone())
-                .collect::<Vec<_>>()
-                .try_into()
-                .unwrap();
-
-            Self {
-                input_layer,
-                hidden_layers,
-                output_layer,
-                mutation_rate: value.mutation_rate,
-                mutation_passes: value.mutation_passes,
-            }
-        }
-    }
-
-    #[cfg(test)]
-    #[test]
-    fn serde() {
-        let mut rng = rand::thread_rng();
-        let nnt = NeuralNetworkTopology::<10, 10>::new(0.1, 3, &mut rng);
-        let nnts = NNTSerde::from(&nnt);
-
-        let encoded = bincode::serialize(&nnts).unwrap();
-
-        if let Some(_) = option_env!("TEST_CREATEFILE") {
-            std::fs::write("serde-test.nn", &encoded).unwrap();
-        }
-
-        let decoded: NNTSerde<10, 10> = bincode::deserialize(&encoded).unwrap();
-        let nnt2: NeuralNetworkTopology<10, 10> = decoded.into();
-
-        dbg!(nnt, nnt2);
-    }
-}
-
-/// Creates an [`ActivationFn`] object from a function
-#[macro_export]
-macro_rules! activation_fn {
-    ($F: path) => {
-        ActivationFn {
-            func: Arc::new($F),
-            name: String::from(stringify!($F)),
-        }
-    };
-
-    {$($F: path),*} => {
-        [$(activation_fn!($F)),*]
-    };
-}
+use crate::activation_fn;
 
 /// A stateless neural network topology.
 /// This is the struct you want to use in your agent's inheritance.
@@ -606,85 +526,6 @@ fn input_exists<const I: usize>(
         NeuronLocation::Hidden(i) => i < hidden.len(),
         NeuronLocation::Output(_) => false,
     }
-}
-
-/// A trait that represents an activation method.
-pub trait Activation {
-    /// The activation function.
-    fn activate(&self, n: f32) -> f32;
-}
-
-impl<F: Fn(f32) -> f32> Activation for F {
-    fn activate(&self, n: f32) -> f32 {
-        (self)(n)
-    }
-}
-
-/// An activation function object that implements [`fmt::Debug`] and is [`Send`]
-#[derive(Clone)]
-pub struct ActivationFn {
-    /// The actual activation function.
-    pub func: Arc<dyn Activation>,
-    name: String,
-}
-
-impl fmt::Debug for ActivationFn {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.name)
-    }
-}
-
-impl PartialEq for ActivationFn {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-#[cfg(feature = "serde")]
-impl Serialize for ActivationFn {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.name)
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<'a> Deserialize<'a> for ActivationFn {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'a>,
-    {
-        let name = String::deserialize(deserializer)?;
-        let activations = activation_fn! {
-            sigmoid,
-            relu,
-            f32::tanh,
-            linear_activation
-        };
-
-        for a in activations {
-            if a.name == name {
-                return Ok(a);
-            }
-        }
-
-        // eventually will make an activation fn registry of sorts.
-        panic!("Custom activation functions currently not supported.") // TODO return error instead of raw panic
-    }
-}
-
-/// The sigmoid activation function.
-pub fn sigmoid(n: f32) -> f32 {
-    1. / (1. + std::f32::consts::E.powf(-n))
-}
-
-/// The ReLU activation function.
-pub fn relu(n: f32) -> f32 {
-    n.max(0.)
-}
-
-/// Activation function that does nothing.
-pub fn linear_activation(n: f32) -> f32 {
-    n
 }
 
 /// A stateless version of [`Neuron`][crate::Neuron].
