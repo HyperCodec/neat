@@ -1,7 +1,7 @@
-use std::{fmt, sync::Arc};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use std::{fmt, sync::Arc};
 
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
@@ -34,7 +34,7 @@ impl<F: Fn(f32) -> f32> Activation for F {
 #[derive(Clone)]
 pub struct ActivationFn {
     /// The actual activation function.
-    pub func: Arc<dyn Activation>,
+    pub func: Arc<dyn Activation + Send + Sync>,
     pub(crate) name: String,
 }
 
