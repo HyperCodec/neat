@@ -67,7 +67,7 @@ impl ActivationRegistry {
         }
     }
 
-    /// Gets a Vec of all the
+    /// Gets a Vec of all the activation functions registered. Unless you need an owned value, use [fns][ActivationRegistry::fns].values() instead.
     pub fn activations(&self) -> Vec<ActivationFn> {
         self.fns.values().cloned().collect()
     }
@@ -77,7 +77,7 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| !scope.contains(ActivationScope::NONE) && scope.contains(a.scope))
+            .filter(|a| a.scope != ActivationScope::NONE && a.scope.contains(scope))
             .collect()
     }
 }
@@ -101,7 +101,7 @@ impl Default for ActivationRegistry {
 
 bitflags! {
     /// Specifies where an activation function can occur
-    #[derive(Copy, Clone)]
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
     pub struct ActivationScope: u8 {
         /// Whether the activation can be applied to the input layer.
         const INPUT = 0b001;
@@ -112,8 +112,8 @@ bitflags! {
         /// Whether the activation can be applied to the output layer.
         const OUTPUT = 0b100;
 
-        /// If this flag is true, it ignores all the rest and does not make the function naturally occur.
-        const NONE = 0b1000;
+        /// The activation function will not be randomly placed anywhere
+        const NONE = 0b000;
     }
 }
 
