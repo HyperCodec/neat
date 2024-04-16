@@ -58,6 +58,8 @@ fn fitness(dna: &MyAgentDNA) -> f32 {
         let above = n > 0.5;
 
         let res = agent.network.predict([n]);
+        agent.network.flush_state();
+        
         let resi = res.iter().max_index();
 
         if resi == 0 ^ above {
