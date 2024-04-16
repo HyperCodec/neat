@@ -91,7 +91,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
-        .caption("agent fitness over gens", ("sans-serif", 50).into_font())
+        .caption("agent fitness values per generation", ("sans-serif", 50).into_font())
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
@@ -103,6 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_iter()
         .enumerate()
         .collect();
+    
     let highs = data
         .iter()
         .map(|(i, PerformanceStats { high, .. })| (*i, *high));
