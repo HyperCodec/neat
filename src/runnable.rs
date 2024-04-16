@@ -253,7 +253,7 @@ impl Neuron {
 
     /// Applies the activation function to the neuron
     pub fn activate(&mut self) {
-        self.state.value = (self.activation.func)(self.state.value);
+        self.state.value = self.activation.func.activate(self.state.value);
     }
 }
 
