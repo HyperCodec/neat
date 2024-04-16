@@ -111,9 +111,17 @@ fn main() {
         sim.next_generation();
     }
 
+    #[cfg(not(feature = "serde"))]
     let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+    
+    #[cfg(feature = "serde")]
+    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
 
+    #[cfg(not(feature = "serde"))]
     fits.sort_by(|a, b| a.partial_cmp(&b).unwrap());
+
+    #[cfg(feature = "serde")]
+    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(&b).unwrap());
 
     dbg!(&fits);
 
