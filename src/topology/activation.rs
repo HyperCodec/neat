@@ -1,9 +1,13 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use std::{collections::HashMap, fmt, sync::{Arc, RwLock}};
-use lazy_static::lazy_static;
 use bitflags::bitflags;
+use lazy_static::lazy_static;
+use std::{
+    collections::HashMap,
+    fmt,
+    sync::{Arc, RwLock},
+};
 
 use crate::NeuronLocation;
 
@@ -63,19 +67,16 @@ impl ActivationRegistry {
         }
     }
 
-    /// Gets a Vec of all the 
+    /// Gets a Vec of all the
     pub fn activations(&self) -> Vec<ActivationFn> {
-        self.fns.values()
-            .cloned()
-            .collect()
+        self.fns.values().cloned().collect()
     }
 
     /// Gets all activation functions that are valid for a scope.
     pub fn activations_in_scope(&self, scope: ActivationScope) -> Vec<ActivationFn> {
         let acts = self.activations();
 
-        acts
-            .into_iter()
+        acts.into_iter()
             .filter(|a| !scope.contains(ActivationScope::NONE) && scope.contains(a.scope))
             .collect()
     }
@@ -83,7 +84,9 @@ impl ActivationRegistry {
 
 impl Default for ActivationRegistry {
     fn default() -> Self {
-        let mut s = Self { fns: HashMap::new() };
+        let mut s = Self {
+            fns: HashMap::new(),
+        };
 
         s.batch_register(activation_fn! {
             sigmoid => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
@@ -155,12 +158,12 @@ pub struct ActivationFn {
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: ActivationScope, name: String) -> Self {
-        Self {
-            func,
-            name,
-            scope,
-        }
+    pub fn new(
+        func: Arc<dyn Activation + Send + Sync>,
+        scope: ActivationScope,
+        name: String,
+    ) -> Self {
+        Self { func, name, scope }
     }
 }
 

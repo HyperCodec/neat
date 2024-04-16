@@ -290,7 +290,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
 
-                let n3 = NeuronTopology::new(vec![loc],  ActivationScope::HIDDEN, rng);
+                let n3 = NeuronTopology::new(vec![loc], ActivationScope::HIDDEN, rng);
 
                 self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
@@ -540,7 +540,11 @@ pub struct NeuronTopology {
 
 impl NeuronTopology {
     /// Creates a new neuron with the given input locations.
-    pub fn new(inputs: Vec<NeuronLocation>, current_scope: ActivationScope, rng: &mut impl Rng) -> Self {
+    pub fn new(
+        inputs: Vec<NeuronLocation>,
+        current_scope: ActivationScope,
+        rng: &mut impl Rng,
+    ) -> Self {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
         let activations = reg.activations_in_scope(current_scope);
 
