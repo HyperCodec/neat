@@ -94,15 +94,11 @@ fn main() {
     let mut sim = GeneticSim::new(
         #[cfg(not(feature = "rayon"))]
         Vec::gen_random(&mut rng, 100),
-
         #[cfg(feature = "rayon")]
         Vec::gen_random(100),
-
         fitness,
-
         #[cfg(not(feature = "crossover"))]
         division_pruning_nextgen,
-
         #[cfg(feature = "crossover")]
         crossover_pruning_nextgen,
     );
@@ -113,7 +109,7 @@ fn main() {
 
     #[cfg(not(feature = "serde"))]
     let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
-    
+
     #[cfg(feature = "serde")]
     let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
 
