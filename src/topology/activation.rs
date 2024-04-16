@@ -77,9 +77,7 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| {
-                a.scope != ActivationScope::NONE && a.scope.contains(scope)
-            })
+            .filter(|a| a.scope != ActivationScope::NONE && a.scope.contains(scope))
             .collect()
     }
 }
