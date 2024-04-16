@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .into_iter()
         .enumerate()
         .collect();
-    
+
     let highs = data
         .iter()
         .map(|(i, PerformanceStats { high, .. })| (*i, *high));
@@ -127,6 +127,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     chart
         .draw_series(LineSeries::new(lows, &RED))?
         .label("low");
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
 
     root.present()?;
 
