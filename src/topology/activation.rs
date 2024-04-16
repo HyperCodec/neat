@@ -12,9 +12,17 @@ macro_rules! activation_fn {
         ActivationFn::new(Arc::new($F), ActivationScope::default(), stringify!($F).into())
     };
 
+    ($F: path, $S: expr) => {
+        ActivationFn::new(Arc::new($F), $S, stringify!($F).into())
+    };
+
     {$($F: path),*} => {
         [$(activation_fn!($F)),*]
     };
+
+    {$($F: path => $S: expr),*} => {
+        [$(activation_fn!($F, $S)),*]
+    }
 }
 
 lazy_static! {
@@ -67,7 +75,7 @@ impl ActivationRegistry {
 
         acts
             .into_iter()
-            .filter(|a| scope.contains(a.scope))
+            .filter(|a| !scope.contains(ActivationScope::NONE) && scope.contains(a.scope))
             .collect()
     }
 }
@@ -77,10 +85,10 @@ impl Default for ActivationRegistry {
         let mut s = Self { fns: HashMap::new() };
 
         s.batch_register(activation_fn! {
-            sigmoid,
-            relu,
-            linear_activation,
-            f32::tanh
+            sigmoid => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
+            relu => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
+            linear_activation => ActivationScope::INPUT | ActivationScope::HIDDEN | ActivationScope::OUTPUT,
+            f32::tanh => ActivationScope::HIDDEN | ActivationScope::OUTPUT
         });
 
         s
@@ -99,6 +107,9 @@ bitflags! {
 
         /// Whether the activation can be applied to the output layer.
         const OUTPUT = 0b100;
+
+        /// If this flag is true, it ignores all the rest and does not make the function naturally occur.
+        const NONE = 0b1000;
     }
 }
 
