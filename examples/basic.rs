@@ -87,55 +87,23 @@ fn fitness(dna: &AgentDNA) -> f32 {
     fitness
 }
 
-#[cfg(all(not(feature = "crossover"), not(feature = "rayon")))]
 fn main() {
+    #[cfg(not(feature = "rayon"))]
     let mut rng = rand::thread_rng();
 
     let mut sim = GeneticSim::new(
+        #[cfg(not(feature = "rayon"))]
         Vec::gen_random(&mut rng, 100),
+
+        #[cfg(feature = "rayon")]
+        Vec::gen_random(100),
+
         fitness,
+
+        #[cfg(not(feature = "crossover"))]
         division_pruning_nextgen,
-    );
 
-    for _ in 0..100 {
-        sim.next_generation();
-    }
-
-    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
-
-    let maxfit = fits
-        .iter()
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
-
-    dbg!(&fits, maxfit);
-}
-
-#[cfg(all(not(feature = "crossover"), feature = "rayon"))]
-fn main() {
-    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, division_pruning_nextgen);
-
-    for _ in 0..100 {
-        sim.next_generation();
-    }
-
-    let fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
-
-    let maxfit = fits
-        .iter()
-        .max_by(|a, b| a.partial_cmp(b).unwrap())
-        .unwrap();
-
-    dbg!(&fits, maxfit);
-}
-
-#[cfg(all(feature = "crossover", not(feature = "rayon")))]
-fn main() {
-    let mut rng = rand::thread_rng();
-
-    let mut sim = GeneticSim::new(
-        Vec::gen_random(&mut rng, 100),
-        fitness,
+        #[cfg(feature = "crossover")]
         crossover_pruning_nextgen,
     );
 
@@ -143,36 +111,16 @@ fn main() {
         sim.next_generation();
     }
 
-    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
+    let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
-    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
+    fits.sort_by(|a, b| a.partial_cmp(&b).unwrap());
 
     dbg!(&fits);
 
-    if cfg!(feature = "serde") {
+    #[cfg(feature = "serde")]
+    {
         let intermediate = NNTSerde::from(&fits[0].0.network);
         let serialized = serde_json::to_string(&intermediate).unwrap();
         println!("{}", serialized);
-    }
-}
-
-#[cfg(all(feature = "crossover", feature = "rayon"))]
-fn main() {
-    let mut sim = GeneticSim::new(Vec::gen_random(100), fitness, crossover_pruning_nextgen);
-
-    for _ in 0..100 {
-        sim.next_generation();
-    }
-
-    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
-
-    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap());
-
-    dbg!(&fits);
-
-    if cfg!(feature = "serde") {
-        let intermediate = NNTSerde::from(&fits[0].0.network);
-        let serialized = serde_json::to_string(&intermediate).unwrap();
-        println!("serialized: {}", serialized);
     }
 }
