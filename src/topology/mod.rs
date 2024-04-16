@@ -559,6 +559,8 @@ impl NeuronTopology {
     ) -> Self {
         let mut activations: Vec<_> = activations.into_iter().collect();
 
+
+
         Self::new_with_activation(
             inputs,
             activations.remove(rng.gen_range(0..activations.len())),
