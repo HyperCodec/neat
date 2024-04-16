@@ -5,6 +5,8 @@ use std::{collections::HashMap, fmt, sync::{Arc, RwLock}};
 use lazy_static::lazy_static;
 use bitflags::bitflags;
 
+use crate::NeuronLocation;
+
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
 macro_rules! activation_fn {
@@ -116,6 +118,16 @@ bitflags! {
 impl Default for ActivationScope {
     fn default() -> Self {
         Self::HIDDEN
+    }
+}
+
+impl From<&NeuronLocation> for ActivationScope {
+    fn from(value: &NeuronLocation) -> Self {
+        match value {
+            NeuronLocation::Input(_) => Self::INPUT,
+            NeuronLocation::Hidden(_) => Self::HIDDEN,
+            NeuronLocation::Output(_) => Self::OUTPUT,
+        }
     }
 }
 

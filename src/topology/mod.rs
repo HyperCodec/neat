@@ -290,7 +290,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 
                 let loc3 = NeuronLocation::Hidden(self.hidden_layers.len());
 
-                let n3 = NeuronTopology::new(vec![loc], rng);
+                let n3 = NeuronTopology::new(vec![loc],  ActivationScope::HIDDEN, rng);
 
                 self.hidden_layers.push(Arc::new(RwLock::new(n3)));
 
@@ -344,11 +344,8 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetworkTopology<I
 
             if rng.gen::<f32>() <= rate && !self.hidden_layers.is_empty() {
                 // mutate activation function
-                let activations = activation_fn! {
-                    sigmoid,
-                    relu,
-                    f32::tanh
-                };
+                let reg = ACTIVATION_REGISTRY.read().unwrap();
+                let activations = reg.activations_in_scope(ActivationScope::HIDDEN);
 
                 let (mut n, mut loc) = self.rand_neuron(rng);
 
@@ -543,12 +540,9 @@ pub struct NeuronTopology {
 
 impl NeuronTopology {
     /// Creates a new neuron with the given input locations.
-    pub fn new(inputs: Vec<NeuronLocation>, rng: &mut impl Rng) -> Self {
-        let activations = activation_fn! {
-            sigmoid,
-            relu,
-            f32::tanh
-        };
+    pub fn new(inputs: Vec<NeuronLocation>, current_scope: ActivationScope, rng: &mut impl Rng) -> Self {
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+        let activations = reg.activations_in_scope(current_scope);
 
         Self::new_with_activations(inputs, activations, rng)
     }
