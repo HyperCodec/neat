@@ -66,8 +66,7 @@ impl ActivationRegistry {
     /// Gets a Vec of all the 
     pub fn activations(&self) -> Vec<ActivationFn> {
         self.fns.values()
-            .into_iter()
-            .map(|v| v.clone())
+            .cloned()
             .collect()
     }
 
