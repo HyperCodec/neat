@@ -38,11 +38,12 @@ fn fitness(g: &AgentDNA) -> f32 {
     fitness
 }
 
-struct PlottingNG {
+struct PlottingNG<F: NextgenFn<AgentDNA>> {
     performance_stats: Arc<Mutex<Vec<PerformanceStats>>>,
+    actual_ng: F,
 }
 
-impl NextgenFn<AgentDNA> for PlottingNG {
+impl<F: NextgenFn<AgentDNA>> NextgenFn<AgentDNA> for PlottingNG<F> {
     fn next_gen(&self, fitness: Vec<(AgentDNA, f32)>) -> Vec<AgentDNA> {
         let l = fitness.len();
 
@@ -55,7 +56,7 @@ impl NextgenFn<AgentDNA> for PlottingNG {
         let mut ps = self.performance_stats.lock().unwrap();
         ps.push(PerformanceStats { high, median, low });
 
-        division_pruning_nextgen(fitness)
+        self.actual_ng.next_gen(fitness)
     }
 }
 
@@ -71,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut rng = rand::thread_rng();
 
     let performance_stats = Arc::new(Mutex::new(Vec::with_capacity(GENS)));
-    let ng = PlottingNG { performance_stats: performance_stats.clone() };
+    let ng = PlottingNG { performance_stats: performance_stats.clone(), actual_ng: division_pruning_nextgen };
 
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 100),
