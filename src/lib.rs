@@ -65,10 +65,16 @@ mod tests {
             fitness
         };
 
+        #[cfg(not(feature = "rayon"))]
         let mut rng = rand::thread_rng();
 
         let mut sim = GeneticSim::new(
+            #[cfg(not(feature = "rayon"))]
             Vec::gen_random(&mut rng, 100),
+
+            #[cfg(feature = "rayon")]
+            Vec::gen_random(100),
+
             fitness,
             division_pruning_nextgen,
         );
