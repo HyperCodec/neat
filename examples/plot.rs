@@ -47,11 +47,11 @@ impl<F: NextgenFn<AgentDNA>> NextgenFn<AgentDNA> for PlottingNG<F> {
     fn next_gen(&self, fitness: Vec<(AgentDNA, f32)>) -> Vec<AgentDNA> {
         let l = fitness.len();
 
-        let high = fitness[0].1;
+        let high = fitness[l-1].1;
 
         let median = fitness[l / 2].1;
 
-        let low = fitness[l-1].1;
+        let low = fitness[0].1;
 
         let mut ps = self.performance_stats.lock().unwrap();
         ps.push(PerformanceStats { high, median, low });
