@@ -30,7 +30,7 @@ mod tests {
     use rand::prelude::*;
 
     #[derive(RandomlyMutable, DivisionReproduction, Clone)]
-    struct AgentDNA { 
+    struct AgentDNA {
         network: NeuralNetworkTopology<2, 1>,
     }
 
@@ -71,10 +71,8 @@ mod tests {
         let mut sim = GeneticSim::new(
             #[cfg(not(feature = "rayon"))]
             Vec::gen_random(&mut rng, 100),
-
             #[cfg(feature = "rayon")]
             Vec::gen_random(100),
-
             fitness,
             division_pruning_nextgen,
         );
@@ -83,10 +81,7 @@ mod tests {
             sim.next_generation();
         }
 
-        let mut fits: Vec<_> = sim.genomes
-            .iter()
-            .map(fitness)
-            .collect();
+        let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
 
         fits.sort_by(|a, b| a.partial_cmp(&b).unwrap());
 
