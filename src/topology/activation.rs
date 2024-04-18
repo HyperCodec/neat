@@ -15,11 +15,11 @@ use crate::NeuronLocation;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(Arc::new($F), ActivationScope::default(), stringify!($F).into())
+        ActivationFn::new(std::sync::Arc::new($F), ActivationScope::default(), stringify!($F).into())
     };
 
     ($F: path, $S: expr) => {
-        ActivationFn::new(Arc::new($F), $S, stringify!($F).into())
+        ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F).into())
     };
 
     {$($F: path),*} => {
