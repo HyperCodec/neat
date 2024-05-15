@@ -44,7 +44,10 @@ struct PlottingNG<F: NextgenFn<AgentDNA>> {
 }
 
 impl<F: NextgenFn<AgentDNA>> NextgenFn<AgentDNA> for PlottingNG<F> {
-    fn next_gen(&self, fitness: Vec<(AgentDNA, f32)>) -> Vec<AgentDNA> {
+    fn next_gen(&self, mut fitness: Vec<(AgentDNA, f32)>) -> Vec<AgentDNA> {
+        // it's a bit slower because of sorting twice but I don't want to rewrite the nextgen.
+        fitness.sort_by(|(_, fa), (_, fb)| fa.partial_cmp(fb).unwrap());
+
         let l = fitness.len();
 
         let high = fitness[l-1].1;
