@@ -6,6 +6,7 @@ use std::{
 use neat::*;
 use plotters::prelude::*;
 use rand::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(RandomlyMutable, DivisionReproduction, Clone)]
 struct AgentDNA {
@@ -73,7 +74,7 @@ struct PerformanceStats {
 }
 
 const OUTPUT_FILE_NAME: &'static str = "fitness-plot.svg";
-const GENS: usize = 100;
+const GENS: usize = 1000;
 
 fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(not(feature = "rayon"))]
@@ -94,11 +95,20 @@ fn main() -> Result<(), Box<dyn Error>> {
         ng,
     );
 
+    let pb = ProgressBar::new(GENS as u64)
+        .with_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}")
+            .unwrap())
+        .with_message("gen");
+
     println!("Training...");
 
     for _ in 0..GENS {
         sim.next_generation();
+
+        pb.inc(1);
     }
+
+    pb.finish();
 
     // prevent `Arc::into_inner` from failing
     drop(sim);
@@ -116,7 +126,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0usize..100, 0f32..200.0)?;
+        .build_cartesian_2d(0usize..GENS, 0f32..1000.0)?;
 
     chart.configure_mesh().draw()?;
 
