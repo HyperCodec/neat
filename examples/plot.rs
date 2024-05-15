@@ -3,10 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use indicatif::{ProgressBar, ProgressStyle};
 use neat::*;
 use plotters::prelude::*;
 use rand::prelude::*;
-use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(RandomlyMutable, DivisionReproduction, Clone)]
 struct AgentDNA {
@@ -96,8 +96,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     let pb = ProgressBar::new(GENS as u64)
-        .with_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}")
-            .unwrap())
+        .with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}",
+            )
+            .unwrap(),
+        )
         .with_message("gen");
 
     println!("Training...");

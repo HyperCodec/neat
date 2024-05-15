@@ -1,8 +1,8 @@
 //! A basic example of NEAT with this crate. Enable the `crossover` feature for it to use crossover reproduction
 
+use indicatif::{ProgressBar, ProgressStyle};
 use neat::*;
 use rand::prelude::*;
-use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(PartialEq, Clone, Debug, DivisionReproduction, RandomlyMutable)]
 #[cfg_attr(feature = "crossover", derive(CrossoverReproduction))]
@@ -106,8 +106,12 @@ fn main() {
 
     const GENS: u64 = 1000;
     let pb = ProgressBar::new(GENS)
-        .with_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}")
-            .unwrap())
+        .with_style(
+            ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}",
+            )
+            .unwrap(),
+        )
         .with_message("gen");
 
     for _ in 0..GENS {
