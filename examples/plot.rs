@@ -71,14 +71,21 @@ struct PerformanceStats {
 
 const OUTPUT_FILE_NAME: &'static str = "fitness-plot.svg";
 const GENS: usize = 100;
+
 fn main() -> Result<(), Box<dyn Error>> {
+    #[cfg(not(feature = "rayon"))]
     let mut rng = rand::thread_rng();
 
     let performance_stats = Arc::new(Mutex::new(Vec::with_capacity(GENS)));
     let ng = PlottingNG { performance_stats: performance_stats.clone(), actual_ng: division_pruning_nextgen };
 
     let mut sim = GeneticSim::new(
+        #[cfg(not(feature = "rayon"))]
         Vec::gen_random(&mut rng, 100),
+
+        #[cfg(feature = "rayon")]
+        Vec::gen_random(100),
+
         fitness,
         ng,
     );
