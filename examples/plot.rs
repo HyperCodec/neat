@@ -88,7 +88,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Training complete, collecting data and building chart...");
 
-    let root = BitMapBackend::new(OUTPUT_FILE_NAME, (640, 480)).into_drawing_area();
+    let root = SVGBackend::new(OUTPUT_FILE_NAME, (640, 480)).into_drawing_area();
     root.fill(&WHITE)?;
 
     let mut chart = ChartBuilder::on(&root)
