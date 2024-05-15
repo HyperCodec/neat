@@ -2,6 +2,7 @@
 
 use neat::*;
 use rand::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(PartialEq, Clone, Debug, DivisionReproduction, RandomlyMutable)]
 #[cfg_attr(feature = "crossover", derive(CrossoverReproduction))]
@@ -103,9 +104,18 @@ fn main() {
         crossover_pruning_nextgen,
     );
 
-    for _ in 0..100 {
+    const GENS: u64 = 1000;
+    let pb = ProgressBar::new(GENS)
+        .with_style(ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} | {msg} {pos}/{len}")
+            .unwrap())
+        .with_message("gen");
+
+    for _ in 0..GENS {
         sim.next_generation();
+        pb.inc(1);
     }
+
+    pb.finish();
 
     #[cfg(not(feature = "serde"))]
     let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
