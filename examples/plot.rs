@@ -66,7 +66,7 @@ struct PerformanceStats {
     low: f32,
 }
 
-const OUTPUT_FILE_NAME: &'static str = "fitness-plot.png";
+const OUTPUT_FILE_NAME: &'static str = "fitness-plot.svg";
 const GENS: usize = 100;
 fn main() -> Result<(), Box<dyn Error>> {
     let mut rng = rand::thread_rng();
@@ -85,6 +85,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     for _ in 0..GENS {
         sim.next_generation();
     }
+
+    // prevent `Arc::into_inner` from failing
+    drop(sim);
 
     println!("Training complete, collecting data and building chart...");
 
