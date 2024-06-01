@@ -121,6 +121,18 @@ impl<const I: usize, const O: usize> NeuralNetworkTopology<I, O> {
             return true;
         }
 
+        // check to make sure it isn't duplicate
+        {
+            let n = self.get_neuron(to);
+            let n2 = n.read().unwrap();
+
+            for (loc, _) in &n2.inputs {
+                if from == *loc {
+                    return false;
+                }
+            }
+        }
+
         let mut visited = HashSet::new();
         self.dfs(from, to, &mut visited)
     }
