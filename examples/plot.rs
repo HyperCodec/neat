@@ -119,6 +119,33 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     println!("Training complete, collecting data and building chart...");
 
+    let data: Vec<_> = Arc::into_inner(performance_stats)
+        .unwrap()
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .enumerate()
+        .collect();
+
+    let highs: Vec<_> = data
+        .iter()
+        .map(|(i, PerformanceStats { high, .. })| (*i, *high))
+        .collect();
+    
+    let highest_overall = highs
+        .iter()
+        .map(|(_, h)| h)
+        .max_by(|&a, &b| a.partial_cmp(b).unwrap())
+        .unwrap();
+
+    let medians = data
+        .iter()
+        .map(|(i, PerformanceStats { median, .. })| (*i, *median));
+
+    let lows = data
+        .iter()
+        .map(|(i, PerformanceStats { low, .. })| (*i, *low));
+
     let root = SVGBackend::new(OUTPUT_FILE_NAME, (640, 480)).into_drawing_area();
     root.fill(&WHITE)?;
 
@@ -130,29 +157,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .margin(5)
         .x_label_area_size(30)
         .y_label_area_size(30)
-        .build_cartesian_2d(0usize..GENS, 0f32..1000.0)?;
+        .build_cartesian_2d(0usize..GENS, 0f32..*highest_overall)?;
 
     chart.configure_mesh().draw()?;
-
-    let data: Vec<_> = Arc::into_inner(performance_stats)
-        .unwrap()
-        .into_inner()
-        .unwrap()
-        .into_iter()
-        .enumerate()
-        .collect();
-
-    let highs = data
-        .iter()
-        .map(|(i, PerformanceStats { high, .. })| (*i, *high));
-
-    let medians = data
-        .iter()
-        .map(|(i, PerformanceStats { median, .. })| (*i, *median));
-
-    let lows = data
-        .iter()
-        .map(|(i, PerformanceStats { low, .. })| (*i, *low));
 
     chart
         .draw_series(LineSeries::new(highs, &GREEN))?
