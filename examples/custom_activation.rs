@@ -60,8 +60,8 @@ fn serde_nextgen(rewards: Vec<(AgentDNA, f32)>) -> Vec<AgentDNA> {
 }
 
 fn main() {
-    let log_activation = activation_fn!(f32::log10);
-    register_activation(log_activation);
+    let sin_activation = activation_fn!(f32::sin);
+    register_activation(sin_activation);
 
     #[cfg(not(feature = "rayon"))]
     let mut rng = rand::thread_rng();
