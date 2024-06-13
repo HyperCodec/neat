@@ -27,11 +27,7 @@ fn fitness(g: &AgentDNA) -> f32 {
         let n = rng.gen::<f32>();
         let n2 = rng.gen::<f32>();
 
-        let expected = if (n + n2) / 2. >= 0.5 {
-            0
-        } else {
-            1
-        };
+        let expected = if (n + n2) / 2. >= 0.5 { 0 } else { 1 };
 
         let result = network.predict([n, n2]);
         network.flush_state();
@@ -73,15 +69,11 @@ fn main() {
     let mut sim = GeneticSim::new(
         #[cfg(not(feature = "rayon"))]
         Vec::gen_random(&mut rng, 100),
-
         #[cfg(feature = "rayon")]
         Vec::gen_random(100),
-
         fitness,
-
         #[cfg(not(feature = "serde"))]
         division_pruning_nextgen,
-
         #[cfg(feature = "serde")]
         serde_nextgen,
     );
