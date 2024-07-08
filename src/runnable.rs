@@ -9,7 +9,6 @@ use rayon::prelude::*;
 use std::sync::{Arc, RwLock};
 
 /// A runnable, stated Neural Network generated from a [NeuralNetworkTopology]. Use [`NeuralNetwork::from`] to go from stateles to runnable.
-/// Because this has state, you need to run [`NeuralNetwork::flush_state`] between [`NeuralNetwork::predict`] calls.
 #[derive(Debug)]
 pub struct NeuralNetwork<'a, const I: usize, const O: usize> {
     topology: &'a NeuralNetworkTopology<I, O>,
