@@ -595,6 +595,10 @@ impl NeuronTopology {
             activation,
         }
     }
+
+    pub fn activate(&self, value: f32) -> f32 {
+        self.activation.func.activate(value)
+    }
 }
 
 /// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
