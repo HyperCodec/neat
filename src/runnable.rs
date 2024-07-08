@@ -60,7 +60,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<'_, I, O> {
         let n = self.get_neuron(loc).unwrap();
         let mut v = 0.;
         for (l, w) in &n.inputs {
-            v += self.process_neuron(*l, &mut cache) * w;
+            v += self.process_neuron(*l, cache) * w;
         }
 
         v = n.activate(v);
