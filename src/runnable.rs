@@ -1,7 +1,7 @@
 use crate::topology::*;
 
 #[cfg(not(feature = "rayon"))]
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 #[cfg(feature = "rayon")]
 use rayon::prelude::*;
