@@ -12,7 +12,7 @@ Implementation of the NEAT algorithm using `genetic-rs`.
 
 *Do you like this repo and want to support it? If so, leave a ⭐*
 
-RAYON FEATURE WARNING there is a known deadlock that can happen in rare scenarios.
+RAYON FEATURE WARNING: there is a known deadlock that can happen in rare scenarios.
 This is an issue that requires an update to the `rayon` crate and no long-term fix can be made right now.
 It is recommended that you backup your generations with the `serde` feature if you use the `rayon` feature in case it hangs.
 Because this is specific and pretty much happens randomly, you can simply start training again from the backup.
