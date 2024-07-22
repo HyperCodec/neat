@@ -10,6 +10,7 @@ jobs:
         runs-on: ubuntu-latest
         environment: testing
         name: Unit Testing
+        timeout-minutes: 10
         steps:
             - uses: actions/checkout@v4
             - name: Run cargo test
