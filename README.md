@@ -1,5 +1,5 @@
 # neat
-[<img alt="github" src="https://img.shields.io/github/last-commit/inflectrix/neat" height="20">](https://github.com/inflectrix/neat)
+[<img alt="github" src="https://img.shields.io/github/last-commit/hypercodec/neat" height="20">](https://github.com/hypercodec/neat)
 [<img alt="crates.io" src="https://img.shields.io/crates/d/neat" height="20">](https://crates.io/crates/neat)
 [<img alt="docs.rs" src="https://img.shields.io/docsrs/neat" height="20">](https://docs.rs/neat)
 
@@ -11,6 +11,12 @@ Implementation of the NEAT algorithm using `genetic-rs`.
 - crossover - Implements the `CrossoverReproduction` trait on `NeuralNetworkTopology` and adds the `crossover` feature to the `genetic-rs` re-export.
 
 *Do you like this repo and want to support it? If so, leave a ⭐*
+
+RAYON FEATURE WARNING: there is a known deadlock that can happen in rare scenarios.
+This is an issue that requires an update to the `rayon` crate and no long-term fix can be made right now without unnecessary overhead.
+It is recommended that you backup your generations with the `serde` feature when using `rayon` in case it deadlocks.
+Because this pretty much happens randomly, you can simply start training again from the backup and it should work fine.
+Sorry for the inconvenience.
 
 ### How To Use
 When working with this crate, you'll want to use the `NeuralNetworkTopology` struct in your agent's DNA and
