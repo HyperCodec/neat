@@ -1,5 +1,7 @@
 pub mod topology;
+pub mod neuralnet;
 
 pub use topology::*;
+pub use neuralnet::*;
 
-pub extern crate genetic_rs;
+pub use genetic_rs;

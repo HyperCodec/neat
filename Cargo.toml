@@ -19,13 +19,13 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["max-index"]
-crossover = ["genetic-rs/crossover"]
 rayon = ["genetic-rs/rayon", "dep:rayon"]
 max-index = []
 serde = ["dep:serde", "dep:serde-big-array"]
 
 
 [dependencies]
+atomic_float = "1.1.0"
 bitflags = "2.6.0"
 genetic-rs = { version = "0.5.4", features = ["derive"] }
 lazy_static = "1.5.0"
