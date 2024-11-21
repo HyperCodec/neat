@@ -1,11 +1,14 @@
-use std::sync::{atomic::{AtomicUsize, Ordering}, Arc};
+use std::sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Arc};
 
 use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
 use rand::Rng;
 
 use crate::activation_fn;
-use super::activation::*;
+use crate::activation::*;
+
+#[cfg(feature = "rayon")]
+use rayon::prelude::*;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
@@ -23,6 +26,7 @@ impl Default for MutationSettings {
     }
 }
 
+// TODO serde
 #[derive(Debug, Clone)]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
     pub input_layer: [Neuron; I],
@@ -75,10 +79,64 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    #[cfg(not(feature = "rayon"))]
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
+        let cache = Arc::new(NeuralNetCache::from(self));
+        cache.prime_inputs(inputs);
+
+        (0..I)
+            .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
+        
+        cache.output()
+    }
+
     #[cfg(feature = "rayon")]
-    pub fn predict(&self, inputs: [f32; I]) {
-        let cache = NeuralNetCache::from(self);
-        todo!();
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
+        let cache = Arc::new(NeuralNetCache::from(self));
+        cache.prime_inputs(inputs);
+
+        (0..I)
+            .into_par_iter()
+            .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
+        
+        cache.output()
+    }
+
+    // TODO either make sync spaghetti or make rayon default.
+    #[cfg(feature = "rayon")]
+    fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
+        let loc = loc.as_ref();
+        
+        if !cache.claim(loc) {
+            // some other thread is already
+            // waiting to do this task, currently doing it, or done.
+            // no need to do it again.
+            return;
+        }
+        
+        while !cache.is_ready(loc) {
+            // essentially spinlocks until the dependency tasks are complete,
+            // while letting this thread do some work on random tasks.
+            rayon::yield_now().unwrap();
+        }
+        
+        let val = cache.get(loc);
+        let n = self.get_neuron(loc);
+
+        n.outputs
+            .par_iter()
+            .for_each(|(loc2, weight)| {
+                cache.add(loc2, val * weight);
+                self.eval(loc2, cache.clone());
+            });
+    }
+
+    pub fn get_neuron(&self, loc: impl AsRef<NeuronLocation>) -> &Neuron {
+        match loc.as_ref() {
+            NeuronLocation::Input(i) => &self.input_layer[*i],
+            NeuronLocation::Hidden(i) => &self.hidden_layers[*i],
+            NeuronLocation::Output(i) => &self.output_layer[*i],
+        }
     }
 }
 
@@ -142,11 +200,18 @@ impl NeuronLocation {
     }
 }
 
+impl AsRef<NeuronLocation> for NeuronLocation {
+    fn as_ref(&self) -> &NeuronLocation {
+        self
+    }
+}
+
 #[derive(Debug)]
 pub struct NeuronCache {
     pub value: AtomicF32,
     pub expected_inputs: usize,
     pub total_inputs: AtomicUsize,
+    pub claimed: AtomicBool,
 }
 
 impl From<&Neuron> for NeuronCache {
@@ -155,23 +220,26 @@ impl From<&Neuron> for NeuronCache {
             value: AtomicF32::new(value.bias),
             expected_inputs: value.input_count,
             total_inputs: AtomicUsize::new(0),
+            claimed: AtomicBool::new(false),
         }
     }
 }
 
+unsafe impl Sync for NeuronCache {}
+
 #[derive(Debug)]
 pub struct NeuralNetCache<const I: usize, const O: usize> {
-    pub input_layer: [Arc<NeuronCache>; I],
-    pub hidden_layers: Vec<Arc<NeuronCache>>,
-    pub output_layer: [Arc<NeuronCache>; O],
+    pub input_layer: [NeuronCache; I],
+    pub hidden_layers: Vec<NeuronCache>,
+    pub output_layer: [NeuronCache; O],
 }
 
 impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
-    pub fn get(&self, loc: impl AsRef<NeuronLocation>) -> Arc<NeuronCache> {
+    pub fn get(&self, loc: impl AsRef<NeuronLocation>) -> f32 {
         match loc.as_ref() {
-            NeuronLocation::Input(i) => self.input_layer[*i].clone(),
-            NeuronLocation::Hidden(i) => self.hidden_layers[*i].clone(),
-            NeuronLocation::Output(i) => self.output_layer[*i].clone(),
+            NeuronLocation::Input(i) => self.input_layer[*i].value.load(Ordering::SeqCst),
+            NeuronLocation::Hidden(i) => self.hidden_layers[*i].value.load(Ordering::SeqCst),
+            NeuronLocation::Output(i) => self.output_layer[*i].value.load(Ordering::SeqCst),
         }
     }
 
@@ -209,6 +277,30 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
             }
         }
     }
+
+    // TODO rayon
+    pub fn prime_inputs(&self, inputs: [f32; I]) {
+        for (i, v) in inputs.into_iter().enumerate() {
+            self.input_layer[i].value.fetch_add(v, Ordering::SeqCst);
+        }
+    }
+
+    pub fn output(&self) -> [f32; O] {
+        let output: Vec<_> = self.output_layer
+            .iter()
+            .map(|c| c.value.load(Ordering::SeqCst))
+            .collect();
+
+        output.try_into().unwrap()
+    }
+
+    pub fn claim(&self, loc: impl AsRef<NeuronLocation>) -> bool {
+        match loc.as_ref() {
+            NeuronLocation::Input(i) => self.input_layer[*i].claimed.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok(),
+            NeuronLocation::Hidden(i) => self.hidden_layers[*i].claimed.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok(),
+            NeuronLocation::Output(i) => self.output_layer[*i].claimed.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire).is_ok(),
+        }
+    }
 }
 
 impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCache<I, O> {
@@ -216,21 +308,21 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
     fn from(net: &NeuralNetwork<I, O>) -> Self {
         let input_layer: Vec<_> = net.input_layer
             .iter()
-            .map(|n|Arc::new(n.into()))
+            .map(|n| n.into())
             .collect();
 
         let input_layer = input_layer.try_into().unwrap();
 
         let hidden_layers: Vec<_> = net.hidden_layers
             .iter()
-            .map(|n| Arc::new(n.into()))
+            .map(|n| n.into())
             .collect();
 
         let hidden_layers = hidden_layers.try_into().unwrap();
 
         let output_layer: Vec<_> = net.output_layer
             .iter()
-            .map(|n| Arc::new(n.into()))
+            .map(|n| n.into())
             .collect();
 
         let output_layer = output_layer.try_into().unwrap();
@@ -242,3 +334,5 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
         }
     }
 }
+
+unsafe impl<const I: usize, const O: usize> Sync for NeuralNetCache<I, O> {}

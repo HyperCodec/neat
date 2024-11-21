@@ -1,7 +1,7 @@
-pub mod topology;
+pub mod activation;
 pub mod neuralnet;
 
-pub use topology::*;
+pub use activation::*;
 pub use neuralnet::*;
 
 pub use genetic_rs;
