@@ -19,7 +19,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["max-index"]
-rayon = ["genetic-rs/rayon", "dep:rayon"]
 max-index = []
 serde = ["dep:serde", "dep:serde-big-array"]
 
@@ -27,9 +26,9 @@ serde = ["dep:serde", "dep:serde-big-array"]
 [dependencies]
 atomic_float = "1.1.0"
 bitflags = "2.6.0"
-genetic-rs = { version = "0.5.4", features = ["derive"] }
+genetic-rs = { version = "0.5.4", features = ["rayon", "derive"] }
 lazy_static = "1.5.0"
 rand = "0.8.5"
-rayon = { version = "1.10.0", optional = true }
+rayon = "1.10.0"
 serde = { version = "1.0.215", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }

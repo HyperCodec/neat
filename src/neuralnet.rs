@@ -7,7 +7,6 @@ use rand::Rng;
 use crate::activation_fn;
 use crate::activation::*;
 
-#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -79,18 +78,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    #[cfg(not(feature = "rayon"))]
-    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
-        let cache = Arc::new(NeuralNetCache::from(self));
-        cache.prime_inputs(inputs);
-
-        (0..I)
-            .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
-        
-        cache.output()
-    }
-
-    #[cfg(feature = "rayon")]
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
@@ -102,8 +89,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         cache.output()
     }
 
-    // TODO either make sync spaghetti or make rayon default.
-    #[cfg(feature = "rayon")]
     fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
         
