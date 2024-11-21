@@ -127,7 +127,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let n = self.get_neuron(loc);
 
         n.outputs.par_iter().for_each(|(loc2, weight)| {
-            cache.add(loc2, val * weight);
+            cache.add(loc2, n.activate(val * weight));
             self.eval(loc2, cache.clone());
         });
     }
@@ -162,6 +162,38 @@ impl Neuron {
             activation_fn,
             input_count: 0,
         }
+    }
+
+    /// Creates a new neuron with the given input locations.
+    pub fn new(
+        outputs: Vec<(NeuronLocation, f32)>,
+        current_scope: ActivationScope,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+        let activations = reg.activations_in_scope(current_scope);
+
+        Self::new_with_activations(outputs, activations, rng)
+    }
+
+    /// Takes a collection of activation functions and chooses a random one to use.
+    pub fn new_with_activations(
+        outputs: Vec<(NeuronLocation, f32)>,
+        activations: impl IntoIterator<Item = ActivationFn>,
+        rng: &mut impl Rng,
+    ) -> Self {
+        // TODO get random in iterator form
+        let mut activations: Vec<_> = activations.into_iter().collect();
+
+        Self::new_with_activation(
+            outputs,
+            activations.remove(rng.gen_range(0..activations.len())),
+            rng,
+        )
+    }
+
+    pub fn activate(&self, v: f32) -> f32 {
+        return self.activation_fn.func.activate(v);
     }
 }
 
