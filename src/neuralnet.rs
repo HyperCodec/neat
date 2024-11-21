@@ -33,7 +33,6 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn new(mutation_settings: MutationSettings, rng: &mut impl Rng) -> Self {
-        // TODO input counts
         let mut output_layer = Vec::with_capacity(O);
 
         for _ in 0..O {
@@ -43,8 +42,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 rng,
             ));
         }
-
-        let output_layer = output_layer.try_into().unwrap();
 
         let mut input_layer = Vec::with_capacity(I);
 
@@ -56,7 +53,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                     while already_chosen.contains(&i) {
                         i = rng.gen_range(0..O);
                     }
-
+                    
+                    output_layer[i].input_count += 1;
                     already_chosen.push(i);
 
                     (NeuronLocation::Output(i), rng.gen())
@@ -67,6 +65,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         let input_layer = input_layer.try_into().unwrap();
+        let output_layer = output_layer.try_into().unwrap();
 
         Self {
             input_layer,
@@ -76,6 +75,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    #[cfg(feature = "rayon")]
     pub fn predict(&self, inputs: [f32; I]) {
         let cache = NeuralNetCache::from(self);
         todo!();
@@ -83,6 +83,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Neuron {
     pub outputs: Vec<(NeuronLocation, f32)>,
     pub bias: f32,
