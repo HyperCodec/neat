@@ -9,6 +9,12 @@ use crate::activation::*;
 
 use rayon::prelude::*;
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
+#[cfg(feature = "serde")]
+use serde_big_array::BigArray;
+
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct MutationSettings {
@@ -27,10 +33,16 @@ impl Default for MutationSettings {
 
 // TODO serde
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
+    #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     pub input_layer: [Neuron; I],
+
     pub hidden_layers: Vec<Neuron>,
+
+    #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     pub output_layer: [Neuron; O],
+    
     pub mutation_settings: MutationSettings,
 }
 
