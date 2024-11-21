@@ -230,8 +230,6 @@ impl From<&Neuron> for NeuronCache {
     }
 }
 
-unsafe impl Sync for NeuronCache {}
-
 #[derive(Debug)]
 pub struct NeuralNetCache<const I: usize, const O: usize> {
     pub input_layer: [NeuronCache; I],
@@ -340,5 +338,3 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
         }
     }
 }
-
-unsafe impl<const I: usize, const O: usize> Sync for NeuralNetCache<I, O> {}
