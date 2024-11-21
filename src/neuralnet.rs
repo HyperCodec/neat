@@ -164,7 +164,7 @@ impl Neuron {
         }
     }
 
-    /// Creates a new neuron with the given input locations.
+    /// Creates a new neuron with the given output locations.
     pub fn new(
         outputs: Vec<(NeuronLocation, f32)>,
         current_scope: ActivationScope,
@@ -197,7 +197,7 @@ impl Neuron {
     }
 }
 
-/// A pseudo-pointer of sorts used to make structural conversions very fast and easy to write.
+/// A pseudo-pointer of sorts that is used for caching.
 #[derive(Hash, Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NeuronLocation {
