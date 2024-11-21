@@ -281,7 +281,6 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         }
     }
 
-    // TODO rayon
     pub fn prime_inputs(&self, inputs: [f32; I]) {
         for (i, v) in inputs.into_iter().enumerate() {
             self.input_layer[i].value.fetch_add(v, Ordering::SeqCst);
@@ -291,7 +290,7 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
     pub fn output(&self) -> [f32; O] {
         let output: Vec<_> = self
             .output_layer
-            .iter()
+            .par_iter()
             .map(|c| c.value.load(Ordering::SeqCst))
             .collect();
 
@@ -319,15 +318,15 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
 impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCache<I, O> {
     // TODO rayon
     fn from(net: &NeuralNetwork<I, O>) -> Self {
-        let input_layer: Vec<_> = net.input_layer.iter().map(|n| n.into()).collect();
+        let input_layer: Vec<_> = net.input_layer.par_iter().map(|n| n.into()).collect();
 
         let input_layer = input_layer.try_into().unwrap();
 
-        let hidden_layers: Vec<_> = net.hidden_layers.iter().map(|n| n.into()).collect();
+        let hidden_layers: Vec<_> = net.hidden_layers.par_iter().map(|n| n.into()).collect();
 
         let hidden_layers = hidden_layers.try_into().unwrap();
 
-        let output_layer: Vec<_> = net.output_layer.iter().map(|n| n.into()).collect();
+        let output_layer: Vec<_> = net.output_layer.par_iter().map(|n| n.into()).collect();
 
         let output_layer = output_layer.try_into().unwrap();
 
