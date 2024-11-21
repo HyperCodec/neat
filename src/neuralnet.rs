@@ -49,6 +49,7 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 }
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
+    // TODO option to set default output layer activations
     pub fn new(mutation_settings: MutationSettings, rng: &mut impl Rng) -> Self {
         let mut output_layer = Vec::with_capacity(O);
 
@@ -78,9 +79,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 })
                 .collect();
 
-            input_layer.push(Neuron::new_with_activation(
+            input_layer.push(Neuron::new(
                 outputs,
-                activation_fn!(sigmoid),
+                ActivationScope::INPUT,
                 rng,
             ));
         }

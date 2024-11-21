@@ -77,7 +77,7 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| a.scope != ActivationScope::NONE && a.scope.contains(scope))
+            .filter(|a| !a.scope.contains(ActivationScope::NONE) && a.scope.contains(scope))
             .collect()
     }
 }
@@ -88,6 +88,7 @@ impl Default for ActivationRegistry {
             fns: HashMap::new(),
         };
 
+        // TODO add a way to disable this
         s.batch_register(activation_fn! {
             sigmoid => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
             relu => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
