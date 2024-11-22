@@ -176,6 +176,49 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let n = self.get_neuron_mut(connection.from);
         n.remove_connection(connection.to)
     }
+
+    /// Adds a connection but does not check for cyclic linkages.
+    pub unsafe fn add_connection_raw(&mut self, connection: Connection, weight: f32) {
+        let a = self.get_neuron_mut(connection.from);
+        a.outputs.push((connection.to, weight));
+
+        let b = self.get_neuron_mut(connection.to);
+        b.inputs.insert(connection.from);
+    }
+
+    /// Returns false if the connection is cyclic.
+    pub fn is_connection_safe(&self, connection: Connection) -> bool {
+        let mut visited = hash_set! { connection.from };
+
+        self.dfs(&mut visited, connection.to)
+    }
+
+    // TODO maybe parallelize
+    fn dfs(&self, visited: &mut HashSet<NeuronLocation>, current: NeuronLocation) -> bool {
+        if !visited.insert(current) {
+            return false;
+        }
+
+        let n = self.get_neuron(current);
+        for (loc, _) in &n.outputs {
+            if !self.dfs(visited, *loc) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Safe, checked add connection method. Returns whether it performed the connection.
+    pub fn add_connection(&mut self, connection: Connection, weight: f32) -> bool {
+        if !self.is_connection_safe(connection) {
+            return false;
+        }
+
+        unsafe { self.add_connection_raw(connection, weight); }
+
+        true
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
