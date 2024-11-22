@@ -10,7 +10,7 @@ use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
 use rand::Rng;
 
-use crate::{activation::*, activation_fn};
+use crate::{activation::{*, fns::*}, activation_fn};
 
 use rayon::prelude::*;
 
