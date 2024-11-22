@@ -169,7 +169,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Connection {
     pub from: NeuronLocation,
