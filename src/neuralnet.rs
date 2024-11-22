@@ -1,7 +1,10 @@
-use std::{collections::HashSet, sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-    Arc,
-}};
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
+};
 
 use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
@@ -157,14 +160,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let a = self.get_neuron_mut(connection.from);
         let weight = a.remove_connection(connection.to).unwrap();
-        
+
         a.outputs.push((newloc, weight));
 
         let n = Neuron::new(
             hash_set! { connection.from },
             vec![(connection.to, weight)],
             ActivationScope::HIDDEN,
-            rng
+            rng,
         );
         self.hidden_layers.push(n);
     }
@@ -418,7 +421,6 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
 }
 
 impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCache<I, O> {
-    // TODO rayon
     fn from(net: &NeuralNetwork<I, O>) -> Self {
         let input_layer: Vec<_> = net.input_layer.par_iter().map(|n| n.into()).collect();
 
