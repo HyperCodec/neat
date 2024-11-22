@@ -149,24 +149,31 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    pub fn split_connection(&mut self, from: impl AsRef<NeuronLocation>, to: impl AsRef<NeuronLocation>, rng: &mut impl Rng) {
+    pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
         let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
 
-        let a = self.get_neuron_mut(from);
-        let weight = a.remove_connection(&to).unwrap();
+        let a = self.get_neuron_mut(connection.from);
+        let weight = a.remove_connection(connection.to).unwrap();
         
         a.outputs.push((newloc, weight));
 
-        let mut n = Neuron::new(vec![(*to.as_ref(), weight)], ActivationScope::HIDDEN, rng);
+        let mut n = Neuron::new(vec![(connection.to, weight)], ActivationScope::HIDDEN, rng);
         n.input_count = 1;
         
         self.hidden_layers.push(n);
     }
 
-    pub fn remove_connection(&mut self, from: impl AsRef<NeuronLocation>, to: impl AsRef<NeuronLocation>) -> Option<f32> {
-        let n = self.get_neuron_mut(from);
-        n.remove_connection(to)
+    pub fn remove_connection(&mut self, connection: Connection) -> Option<f32> {
+        let n = self.get_neuron_mut(connection.from);
+        n.remove_connection(connection.to)
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Connection {
+    pub from: NeuronLocation,
+    pub to: NeuronLocation,
 }
 
 #[derive(Debug, Clone)]
