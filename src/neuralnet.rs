@@ -140,6 +140,33 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             NeuronLocation::Output(i) => &self.output_layer[*i],
         }
     }
+
+    pub fn get_neuron_mut(&mut self, loc: impl AsRef<NeuronLocation>) -> &mut Neuron {
+        match loc.as_ref() {
+            NeuronLocation::Input(i) => &mut self.input_layer[*i],
+            NeuronLocation::Hidden(i) => &mut self.hidden_layers[*i],
+            NeuronLocation::Output(i) => &mut self.output_layer[*i],
+        }
+    }
+
+    pub fn split_connection(&mut self, from: impl AsRef<NeuronLocation>, to: impl AsRef<NeuronLocation>, rng: &mut impl Rng) {
+        let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
+
+        let a = self.get_neuron_mut(from);
+        let weight = a.remove_connection(&to).unwrap();
+        
+        a.outputs.push((newloc, weight));
+
+        let mut n = Neuron::new(vec![(*to.as_ref(), weight)], ActivationScope::HIDDEN, rng);
+        n.input_count = 1;
+        
+        self.hidden_layers.push(n);
+    }
+
+    pub fn remove_connection(&mut self, from: impl AsRef<NeuronLocation>, to: impl AsRef<NeuronLocation>) -> Option<f32> {
+        let n = self.get_neuron_mut(from);
+        n.remove_connection(to)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -195,6 +222,31 @@ impl Neuron {
 
     pub fn activate(&self, v: f32) -> f32 {
         return self.activation_fn.func.activate(v);
+    }
+
+    pub fn get_weight(&self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
+        let loc = *output.as_ref();
+        for out in &self.outputs {
+            if out.0 == loc {
+                return Some(out.1);
+            }
+        }
+
+        None
+    }
+
+    pub fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
+        let loc = *output.as_ref();
+        let mut i = 0;
+
+        while i < self.outputs.len() {
+            if self.outputs[i].0 == loc {
+                return Some(self.outputs.remove(i).1);
+            }
+            i += 1;
+        }
+
+        None
     }
 }
 
