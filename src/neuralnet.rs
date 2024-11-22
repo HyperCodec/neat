@@ -1,10 +1,11 @@
-use std::sync::{
+use std::{collections::HashSet, sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
-};
+}};
 
 use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
+use map_macro::hash_set;
 use rand::Rng;
 
 use crate::{activation::*, activation_fn};
@@ -55,6 +56,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         for _ in 0..O {
             output_layer.push(Neuron::new_with_activation(
+                hash_set! {},
                 vec![],
                 activation_fn!(sigmoid),
                 rng,
@@ -63,16 +65,16 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let mut input_layer = Vec::with_capacity(I);
 
-        for _ in 0..I {
+        for i in 0..I {
             let outputs = (0..rng.gen_range(1..=O))
                 .map(|_| {
                     let mut already_chosen = Vec::new();
-                    let mut i = rng.gen_range(0..O);
-                    while already_chosen.contains(&i) {
-                        i = rng.gen_range(0..O);
+                    let mut j = rng.gen_range(0..O);
+                    while already_chosen.contains(&j) {
+                        j = rng.gen_range(0..O);
                     }
 
-                    output_layer[i].input_count += 1;
+                    output_layer[j].inputs.insert(NeuronLocation::Input(i));
                     already_chosen.push(i);
 
                     (NeuronLocation::Output(i), rng.gen())
@@ -80,6 +82,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 .collect();
 
             input_layer.push(Neuron::new(
+                hash_set! {},
                 outputs,
                 ActivationScope::INPUT,
                 rng,
@@ -157,9 +160,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         
         a.outputs.push((newloc, weight));
 
-        let mut n = Neuron::new(vec![(connection.to, weight)], ActivationScope::HIDDEN, rng);
-        n.input_count = 1;
-        
+        let n = Neuron::new(
+            hash_set! { connection.from },
+            vec![(connection.to, weight)],
+            ActivationScope::HIDDEN,
+            rng
+        );
         self.hidden_layers.push(n);
     }
 
@@ -179,28 +185,30 @@ pub struct Connection {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Neuron {
+    pub inputs: HashSet<NeuronLocation>,
     pub outputs: Vec<(NeuronLocation, f32)>,
     pub bias: f32,
     pub activation_fn: ActivationFn,
-    pub input_count: usize,
 }
 
 impl Neuron {
     pub fn new_with_activation(
+        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         activation_fn: ActivationFn,
         rng: &mut impl Rng,
     ) -> Self {
         Self {
+            inputs,
             outputs,
             bias: rng.gen(),
             activation_fn,
-            input_count: 0,
         }
     }
 
     /// Creates a new neuron with the given output locations.
     pub fn new(
+        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         current_scope: ActivationScope,
         rng: &mut impl Rng,
@@ -208,11 +216,12 @@ impl Neuron {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
         let activations = reg.activations_in_scope(current_scope);
 
-        Self::new_with_activations(outputs, activations, rng)
+        Self::new_with_activations(inputs, outputs, activations, rng)
     }
 
     /// Takes a collection of activation functions and chooses a random one to use.
     pub fn new_with_activations(
+        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         activations: impl IntoIterator<Item = ActivationFn>,
         rng: &mut impl Rng,
@@ -221,6 +230,7 @@ impl Neuron {
         let mut activations: Vec<_> = activations.into_iter().collect();
 
         Self::new_with_activation(
+            inputs,
             outputs,
             activations.remove(rng.gen_range(0..activations.len())),
             rng,
@@ -315,7 +325,7 @@ impl From<&Neuron> for NeuronCache {
     fn from(value: &Neuron) -> Self {
         Self {
             value: AtomicF32::new(value.bias),
-            expected_inputs: value.input_count,
+            expected_inputs: value.inputs.len(),
             total_inputs: AtomicUsize::new(0),
             claimed: AtomicBool::new(false),
         }
