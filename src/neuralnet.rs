@@ -7,6 +7,7 @@ use std::{
 };
 
 use atomic_float::AtomicF32;
+use bitflags::bitflags;
 use genetic_rs::prelude::*;
 use rand::Rng;
 
@@ -23,15 +24,22 @@ use serde_big_array::BigArray;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone)]
 pub struct MutationSettings {
+    /// The chance of each mutation type to occur.
     pub mutation_rate: f32,
-    pub mutation_passes: f32,
+
+    /// The number of times to try to mutate the network.
+    pub mutation_passes: usize,
+
+    /// The maximum amount that the weights will be mutated by.
+    pub weight_mutation_amount: f32,
 }
 
 impl Default for MutationSettings {
     fn default() -> Self {
         Self {
             mutation_rate: 0.01,
-            mutation_passes: 3.,
+            mutation_passes: 3,
+            weight_mutation_amount: 0.5,
         }
     }
 }
@@ -84,7 +92,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
             input_layer.push(Neuron::new(
                 outputs,
-                ActivationScope::INPUT,
+                NeuronScope::INPUT,
                 rng,
             ));
         }
@@ -156,21 +164,16 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
 
         let a = self.get_neuron_mut(connection.from);
-        let weight = a.remove_connection(connection.to).unwrap();
+        let weight = unsafe { a.remove_connection(connection.to) }.unwrap();
 
         a.outputs.push((newloc, weight));
 
         let n = Neuron::new(
             vec![(connection.to, weight)],
-            ActivationScope::HIDDEN,
+            NeuronScope::HIDDEN,
             rng,
         );
         self.hidden_layers.push(n);
-    }
-
-    pub fn remove_connection(&mut self, connection: Connection) -> Option<f32> {
-        let n = self.get_neuron_mut(connection.from);
-        n.remove_connection(connection.to)
     }
 
     /// Adds a connection but does not check for cyclic linkages. Could cause a hang/deadlock when predicting.
@@ -217,7 +220,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
-        let rate = self.mutation_settings.mutation_rate;
+        let rate = self.mutation_settings.weight_mutation_amount;
         let n = self.get_neuron_mut(connection.from);
         n.mutate_weight(connection.to, rate, rng).unwrap();
     }
@@ -229,6 +232,91 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             2 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
             _ => unreachable!(),
         }
+    }
+
+    /// Get a random boolean with a probability of [`mutation_rate`](MutationSettings::mutation_rate)
+    pub fn should_mutate(&self, rng: &mut impl Rng) -> bool {
+        rng.gen::<f32>() <= self.mutation_settings.mutation_rate
+    }
+
+    pub fn random_location_in_scope(&self, rng: &mut impl Rng, scope: NeuronScope) -> NeuronLocation {
+        let loc = self.random_location(rng);
+
+        // this is a lazy and slow way of donig it, TODO better version.
+        if !scope.contains(NeuronScope::from(loc)) {
+            return self.random_location_in_scope(rng, scope);
+        }
+
+        loc
+    }
+
+    /// Remove a connection and any hanging neurons caused by the deletion.
+    /// Returns whether there was a hanging neuron.
+    pub fn remove_connection(&mut self, connection: Connection) -> bool {
+        let a = self.get_neuron_mut(connection.from);
+        unsafe { a.remove_connection(connection.to) }.unwrap();
+
+        let b = self.get_neuron_mut(connection.to);
+        b.input_count -= 1;
+
+        if b.input_count <= 0 {
+            self.remove_neuron(connection.to);
+            return true;
+        }
+
+        false
+    }
+
+    pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
+        todo!("deletion shifts a bunch of indices");
+    }
+}
+
+impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O> {
+    fn divide(&self, rng: &mut impl Rng) -> Self {
+        let mut child = self.clone();
+
+        for _ in 0..child.mutation_settings.mutation_passes {
+            if child.should_mutate(rng) {
+                // split connection
+                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let n = child.get_neuron(from);
+                let (to, _) = n.random_output(rng);
+
+                child.split_connection(Connection { from, to }, rng);
+            }
+
+            if child.should_mutate(rng) {
+                // add connection
+                let weight = rng.gen::<f32>();
+
+                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let to = child.random_location_in_scope(rng, !NeuronScope::INPUT);
+
+                let mut connection = Connection { from, to };
+                while !child.add_connection(connection, weight) {
+                    let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                    let to = child.random_location_in_scope(rng, !NeuronScope::INPUT);
+                    connection = Connection { from, to };
+                }
+            }
+
+            if child.should_mutate(rng) {
+                // remove connection
+
+                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let a = child.get_neuron(from);
+                let (to, _) = a.random_output(rng);
+                
+                child.remove_connection(Connection { from, to });
+
+                todo!("need to delete hanging neurons");
+            }
+
+            todo!("weight mutation");
+        }
+
+        child
     }
 }
 
@@ -265,7 +353,7 @@ impl Neuron {
     /// Creates a new neuron with the given output locations.
     pub fn new(
         outputs: Vec<(NeuronLocation, f32)>,
-        current_scope: ActivationScope,
+        current_scope: NeuronScope,
         rng: &mut impl Rng,
     ) -> Self {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
@@ -305,7 +393,7 @@ impl Neuron {
         None
     }
 
-    pub fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
+    pub unsafe fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
         let loc = *output.as_ref();
         let mut i = 0;
 
@@ -335,6 +423,10 @@ impl Neuron {
         }
 
         None
+    }
+
+    pub fn random_output(&self, rng: &mut impl Rng) -> (NeuronLocation, f32) {
+        self.outputs[rng.gen_range(0..self.outputs.len())]
     }
 }
 
@@ -506,6 +598,40 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
             input_layer,
             hidden_layers,
             output_layer,
+        }
+    }
+}
+
+bitflags! {
+    /// Specifies where an activation function can occur
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub struct NeuronScope: u8 {
+        /// Whether the activation can be applied to the input layer.
+        const INPUT = 0b001;
+
+        /// Whether the activation can be applied to the hidden layer.
+        const HIDDEN = 0b010;
+
+        /// Whether the activation can be applied to the output layer.
+        const OUTPUT = 0b100;
+
+        /// The activation function will not be randomly placed anywhere
+        const NONE = 0b000;
+    }
+}
+
+impl Default for NeuronScope {
+    fn default() -> Self {
+        Self::HIDDEN
+    }
+}
+
+impl<L: AsRef<NeuronLocation>> From<L> for NeuronScope {
+    fn from(value: L) -> Self {
+        match value.as_ref() {
+            NeuronLocation::Input(_) => Self::INPUT,
+            NeuronLocation::Hidden(_) => Self::HIDDEN,
+            NeuronLocation::Output(_) => Self::OUTPUT,
         }
     }
 }
