@@ -8,7 +8,6 @@ use std::{
 
 use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
-use map_macro::hash_set;
 use rand::Rng;
 
 use crate::{activation::*, activation_fn};
@@ -59,7 +58,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         for _ in 0..O {
             output_layer.push(Neuron::new_with_activation(
-                hash_set! {},
                 vec![],
                 activation_fn!(sigmoid),
                 rng,
@@ -77,7 +75,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                         j = rng.gen_range(0..O);
                     }
 
-                    output_layer[j].inputs.insert(NeuronLocation::Input(i));
+                    // output_layer[j].inputs.insert(NeuronLocation::Input(i));
                     already_chosen.push(i);
 
                     (NeuronLocation::Output(i), rng.gen())
@@ -85,7 +83,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 .collect();
 
             input_layer.push(Neuron::new(
-                hash_set! {},
                 outputs,
                 ActivationScope::INPUT,
                 rng,
@@ -164,7 +161,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         a.outputs.push((newloc, weight));
 
         let n = Neuron::new(
-            hash_set! { connection.from },
             vec![(connection.to, weight)],
             ActivationScope::HIDDEN,
             rng,
@@ -182,13 +178,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.push((connection.to, weight));
 
-        let b = self.get_neuron_mut(connection.to);
-        b.inputs.insert(connection.from);
+        // let b = self.get_neuron_mut(connection.to);
+        // b.inputs.insert(connection.from);
     }
 
     /// Returns false if the connection is cyclic.
     pub fn is_connection_safe(&self, connection: Connection) -> bool {
-        let mut visited = hash_set! { connection.from };
+        let mut visited = HashSet::from([connection.from]);
 
         self.dfs(&mut visited, connection.to)
     }
@@ -231,7 +227,7 @@ pub struct Connection {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Neuron {
-    pub inputs: HashSet<NeuronLocation>,
+    pub input_count: usize,
     pub outputs: Vec<(NeuronLocation, f32)>,
     pub bias: f32,
     pub activation_fn: ActivationFn,
@@ -239,13 +235,12 @@ pub struct Neuron {
 
 impl Neuron {
     pub fn new_with_activation(
-        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         activation_fn: ActivationFn,
         rng: &mut impl Rng,
     ) -> Self {
         Self {
-            inputs,
+            input_count: 0,
             outputs,
             bias: rng.gen(),
             activation_fn,
@@ -254,7 +249,6 @@ impl Neuron {
 
     /// Creates a new neuron with the given output locations.
     pub fn new(
-        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         current_scope: ActivationScope,
         rng: &mut impl Rng,
@@ -262,12 +256,11 @@ impl Neuron {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
         let activations = reg.activations_in_scope(current_scope);
 
-        Self::new_with_activations(inputs, outputs, activations, rng)
+        Self::new_with_activations(outputs, activations, rng)
     }
 
     /// Takes a collection of activation functions and chooses a random one to use.
     pub fn new_with_activations(
-        inputs: HashSet<NeuronLocation>,
         outputs: Vec<(NeuronLocation, f32)>,
         activations: impl IntoIterator<Item = ActivationFn>,
         rng: &mut impl Rng,
@@ -276,7 +269,6 @@ impl Neuron {
         let mut activations: Vec<_> = activations.into_iter().collect();
 
         Self::new_with_activation(
-            inputs,
             outputs,
             activations.remove(rng.gen_range(0..activations.len())),
             rng,
@@ -371,7 +363,7 @@ impl From<&Neuron> for NeuronCache {
     fn from(value: &Neuron) -> Self {
         Self {
             value: AtomicF32::new(value.bias),
-            expected_inputs: value.inputs.len(),
+            expected_inputs: value.input_count,
             total_inputs: AtomicUsize::new(0),
             claimed: AtomicBool::new(false),
         }
