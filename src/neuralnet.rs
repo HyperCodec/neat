@@ -173,7 +173,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         n.remove_connection(connection.to)
     }
 
-    /// Adds a connection but does not check for cyclic linkages.
+    /// Adds a connection but does not check for cyclic linkages. Could cause a hang/deadlock when predicting.
     pub unsafe fn add_connection_raw(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.push((connection.to, weight));
@@ -214,6 +214,21 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         unsafe { self.add_connection_raw(connection, weight); }
 
         true
+    }
+
+    pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
+        let rate = self.mutation_settings.mutation_rate;
+        let n = self.get_neuron_mut(connection.from);
+        n.mutate_weight(connection.to, rate, rng).unwrap();
+    }
+
+    pub fn random_location(&self, rng: &mut impl Rng) -> NeuronLocation {
+        match rng.gen_range(0..3) {
+            0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
+            1 => NeuronLocation::Hidden(rng.gen_range(0..self.hidden_layers.len())),
+            2 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -298,6 +313,24 @@ impl Neuron {
             if self.outputs[i].0 == loc {
                 return Some(self.outputs.remove(i).1);
             }
+            i += 1;
+        }
+
+        None
+    }
+
+    pub fn mutate_weight(&mut self, output: impl AsRef<NeuronLocation>, rate: f32, rng: &mut impl Rng) -> Option<f32> {
+        let loc = *output.as_ref();
+        let mut i = 0;
+
+        while i < self.outputs.len() {
+            let o = &mut self.outputs[i];
+            if o.0 == loc {
+                o.1 += rng.gen_range(-rate..rate);
+
+                return Some(o.1);
+            }
+
             i += 1;
         }
 
