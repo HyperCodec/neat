@@ -414,6 +414,9 @@ impl Neuron {
         // TODO get random in iterator form
         let mut activations: Vec<_> = activations.into_iter().collect();
 
+        // might want to remove this later.
+        assert!(!activations.is_empty());
+
         Self::new_with_activation(
             outputs,
             activations.remove(rng.gen_range(0..activations.len())),
