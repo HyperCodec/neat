@@ -9,6 +9,7 @@ use atomic_float::AtomicF32;
 use bitflags::bitflags;
 use genetic_rs::prelude::*;
 use rand::Rng;
+use replace_with::replace_with_or_abort;
 
 use crate::{activation::{*, fns::*}, activation_fn};
 
@@ -266,8 +267,24 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         false
     }
 
+    /// Remove a neuron and downshift all connection indexes to compensate for it.
     pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
-        todo!("deletion shifts a bunch of indices");
+        let loc = loc.as_ref();
+        if !loc.is_hidden() {
+            panic!("Can only remove neurons from hidden layer");
+        }
+
+        unsafe { self.downshift_connections(loc.unwrap()); }
+    }
+
+    unsafe fn downshift_connections(&mut self, i: usize) {
+        self.input_layer
+            .par_iter_mut()
+            .for_each(|n| n.downshift_outputs(i));
+
+        self.hidden_layers
+            .par_iter_mut()
+            .for_each(|n| n.downshift_outputs(i));
     }
 
     pub fn map_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
@@ -280,7 +297,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for n in &mut self.hidden_layers {
             n.outputs
                 .par_iter_mut()
-                .for_each(|(loc, w)| callback(w));
+                .for_each(|(_, w)| callback(w));
         }
     }
 }
@@ -320,8 +337,6 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 let (to, _) = a.random_output(rng);
                 
                 self.remove_connection(Connection { from, to });
-
-                todo!("need to delete hanging neurons");
             }
 
             let mutation_rate = self.mutation_settings.mutation_rate;
@@ -455,6 +470,17 @@ impl Neuron {
 
     pub fn random_output(&self, rng: &mut impl Rng) -> (NeuronLocation, f32) {
         self.outputs[rng.gen_range(0..self.outputs.len())]
+    }
+
+    pub(crate) fn downshift_outputs(&mut self, i: usize) {
+        replace_with_or_abort(&mut self.outputs, |o| {
+            o.into_par_iter()
+            .map(|(loc, w)| match loc {
+                NeuronLocation::Hidden(j) if j > i => (NeuronLocation::Hidden(j-1), w),
+                _ => (loc, w)
+            })
+            .collect()
+        });
     }
 }
 

@@ -30,5 +30,6 @@ genetic-rs = { version = "0.5.4", features = ["rayon", "derive"] }
 lazy_static = "1.5.0"
 rand = "0.8.5"
 rayon = "1.10.0"
+replace_with = "0.1.7"
 serde = { version = "1.0.215", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }

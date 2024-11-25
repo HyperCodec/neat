@@ -117,6 +117,7 @@ dependencies = [
  "lazy_static",
  "rand",
  "rayon",
+ "replace_with",
  "serde",
  "serde-big-array",
 ]
