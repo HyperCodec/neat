@@ -1,9 +1,8 @@
 use std::{
-    collections::HashSet,
-    sync::{
+    collections::HashSet, sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
-    },
+    }
 };
 
 use atomic_float::AtomicF32;
@@ -270,51 +269,80 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
         todo!("deletion shifts a bunch of indices");
     }
+
+    pub fn map_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
+        for n in &mut self.input_layer {
+            n.outputs
+                .par_iter_mut()
+                .for_each(|(_, w)| callback(w));
+        }
+
+        for n in &mut self.hidden_layers {
+            n.outputs
+                .par_iter_mut()
+                .for_each(|(loc, w)| callback(w));
+        }
+    }
+}
+
+impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
+    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
+        for _ in 0..self.mutation_settings.mutation_passes {
+            if self.should_mutate(rng) {
+                // split connection
+                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let n = self.get_neuron(from);
+                let (to, _) = n.random_output(rng);
+
+                self.split_connection(Connection { from, to }, rng);
+            }
+
+            if self.should_mutate(rng) {
+                // add connection
+                let weight = rng.gen::<f32>();
+
+                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
+
+                let mut connection = Connection { from, to };
+                while !self.add_connection(connection, weight) {
+                    let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                    let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
+                    connection = Connection { from, to };
+                }
+            }
+
+            if self.should_mutate(rng) {
+                // remove connection
+
+                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+                let a = self.get_neuron(from);
+                let (to, _) = a.random_output(rng);
+                
+                self.remove_connection(Connection { from, to });
+
+                todo!("need to delete hanging neurons");
+            }
+
+            let mutation_rate = self.mutation_settings.mutation_rate;
+            self.map_weights(| w| {
+                let mut rng = rand::thread_rng();
+
+                // TODO common should_mutate abstraction that doesn't require cloning self.
+                // probably just make it a separate function.
+                if rng.gen::<f32>() <= mutation_rate {
+                    *w += rng.gen_range(-rate..rate);
+                }
+            });
+        }
+    }
 }
 
 impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O> {
     fn divide(&self, rng: &mut impl Rng) -> Self {
         let mut child = self.clone();
 
-        for _ in 0..child.mutation_settings.mutation_passes {
-            if child.should_mutate(rng) {
-                // split connection
-                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let n = child.get_neuron(from);
-                let (to, _) = n.random_output(rng);
-
-                child.split_connection(Connection { from, to }, rng);
-            }
-
-            if child.should_mutate(rng) {
-                // add connection
-                let weight = rng.gen::<f32>();
-
-                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let to = child.random_location_in_scope(rng, !NeuronScope::INPUT);
-
-                let mut connection = Connection { from, to };
-                while !child.add_connection(connection, weight) {
-                    let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                    let to = child.random_location_in_scope(rng, !NeuronScope::INPUT);
-                    connection = Connection { from, to };
-                }
-            }
-
-            if child.should_mutate(rng) {
-                // remove connection
-
-                let from = child.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let a = child.get_neuron(from);
-                let (to, _) = a.random_output(rng);
-                
-                child.remove_connection(Connection { from, to });
-
-                todo!("need to delete hanging neurons");
-            }
-
-            todo!("weight mutation");
-        }
+        child.mutate(child.mutation_settings.mutation_rate, rng);
 
         child
     }
