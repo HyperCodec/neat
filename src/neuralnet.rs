@@ -90,9 +90,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 })
                 .collect();
 
-            input_layer.push(Neuron::new(
+            input_layer.push(Neuron::new_with_activation(
                 outputs,
-                NeuronScope::INPUT,
+                activation_fn!(linear_activation),
                 rng,
             ));
         }
