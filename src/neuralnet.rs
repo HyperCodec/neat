@@ -11,7 +11,7 @@ use genetic_rs::prelude::*;
 use rand::Rng;
 use replace_with::replace_with_or_abort;
 
-use crate::{activation::{*, fns::*}, activation_fn};
+use crate::{activation::{*, builtin::*}, activation_fn};
 
 use rayon::prelude::*;
 

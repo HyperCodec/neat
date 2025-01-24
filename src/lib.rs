@@ -1,7 +1,7 @@
 pub mod activation;
 pub mod neuralnet;
 
-pub use activation::{*, fns::*};
+pub use activation::{*, builtin::*};
 pub use neuralnet::*;
 
 pub use genetic_rs::{self, prelude::*};

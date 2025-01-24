@@ -1,6 +1,6 @@
-pub mod fns;
+pub mod builtin;
 
-use fns::*;
+use builtin::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
