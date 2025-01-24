@@ -74,19 +74,19 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let mut input_layer = Vec::with_capacity(I);
 
-        for i in 0..I {
+        for _ in 0..I {
+            let mut already_chosen = Vec::new();
             let outputs = (0..rng.gen_range(1..=O))
                 .map(|_| {
-                    let mut already_chosen = Vec::new();
                     let mut j = rng.gen_range(0..O);
                     while already_chosen.contains(&j) {
                         j = rng.gen_range(0..O);
                     }
 
                     // output_layer[j].inputs.insert(NeuronLocation::Input(i));
-                    already_chosen.push(i);
+                    already_chosen.push(j);
 
-                    (NeuronLocation::Output(i), rng.gen())
+                    (NeuronLocation::Output(j), rng.gen())
                 })
                 .collect();
 
@@ -99,6 +99,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let input_layer = input_layer.try_into().unwrap();
         let output_layer = output_layer.try_into().unwrap();
+
+        // dbg!(&input_layer);
 
         Self {
             input_layer,
