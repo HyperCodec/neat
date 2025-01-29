@@ -69,7 +69,10 @@ fn fitness(agent: &Agent) -> f32 {
             }
 
             // println!("started prediction");
-            let [cur_guess] = agent.0.predict([last_guess, last_result, last_guess_2, last_result_2]);
+            let [cur_guess] =
+                agent
+                    .0
+                    .predict([last_guess, last_result, last_guess_2, last_result_2]);
             let cur_result = game.guess(cur_guess);
             // println!("finished prediction");
 
@@ -104,11 +107,7 @@ fn division() {
         .map(|_| Agent(NeuralNetwork::new(MutationSettings::default(), &mut rng)))
         .collect();
 
-    let mut sim = GeneticSim::new(
-        starting_genomes,
-        fitness,
-        division_pruning_nextgen,
-    );
+    let mut sim = GeneticSim::new(starting_genomes, fitness, division_pruning_nextgen);
 
     sim.perform_generations(100);
 }
@@ -117,7 +116,11 @@ fn division() {
 fn neural_net_cache_sync() {
     let cache = NeuralNetCache {
         input_layer: [NeuronCache::new(0.3, 0), NeuronCache::new(0.25, 0)],
-        hidden_layers: vec![NeuronCache::new(0.2, 2), NeuronCache::new(0.0, 2), NeuronCache::new(1.5, 2)],
+        hidden_layers: vec![
+            NeuronCache::new(0.2, 2),
+            NeuronCache::new(0.0, 2),
+            NeuronCache::new(1.5, 2),
+        ],
         output_layer: [NeuronCache::new(0.0, 3), NeuronCache::new(0.0, 3)],
     };
 
@@ -125,9 +128,12 @@ fn neural_net_cache_sync() {
         let input_loc = NeuronLocation::Input(i);
 
         assert!(cache.claim(&input_loc));
-        
+
         for j in 0..3 {
-            cache.add(NeuronLocation::Hidden(j), f32::tanh(cache.get(&input_loc) * 1.2));
+            cache.add(
+                NeuronLocation::Hidden(j),
+                f32::tanh(cache.get(&input_loc) * 1.2),
+            );
         }
     }
 
@@ -138,7 +144,10 @@ fn neural_net_cache_sync() {
         assert!(cache.claim(&hidden_loc));
 
         for j in 0..2 {
-            cache.add(NeuronLocation::Output(j), activation::builtin::sigmoid(cache.get(&hidden_loc) * 0.7));
+            cache.add(
+                NeuronLocation::Output(j),
+                activation::builtin::sigmoid(cache.get(&hidden_loc) * 0.7),
+            );
         }
     }
 

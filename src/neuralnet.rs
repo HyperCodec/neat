@@ -1,8 +1,9 @@
 use std::{
-    collections::HashSet, sync::{
+    collections::HashSet,
+    sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
-    }
+    },
 };
 
 use atomic_float::AtomicF32;
@@ -11,7 +12,10 @@ use genetic_rs::prelude::*;
 use rand::Rng;
 use replace_with::replace_with_or_abort;
 
-use crate::{activation::{*, builtin::*}, activation_fn};
+use crate::{
+    activation::{builtin::*, *},
+    activation_fn,
+};
 
 use rayon::prelude::*;
 
@@ -132,9 +136,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.inner_eval(loc, cache);
     }
 
-    fn inner_eval(self: Arc<Self>, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
+    fn inner_eval(
+        self: Arc<Self>,
+        loc: impl AsRef<NeuronLocation>,
+        cache: Arc<NeuralNetCache<I, O>>,
+    ) {
         // separated from `eval` because of the claiming system and recursion.
-        
+
         let loc = loc.as_ref();
         if !cache.is_ready(loc) {
             // essentially spinlocks until the dependency tasks are complete,
@@ -180,11 +188,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         a.outputs.push((newloc, weight));
 
-        let n = Neuron::new(
-            vec![(connection.to, weight)],
-            NeuronScope::HIDDEN,
-            rng,
-        );
+        let n = Neuron::new(vec![(connection.to, weight)], NeuronScope::HIDDEN, rng);
         self.hidden_layers.push(n);
     }
 
@@ -226,7 +230,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return false;
         }
 
-        unsafe { self.add_connection_raw(connection, weight); }
+        unsafe {
+            self.add_connection_raw(connection, weight);
+        }
 
         true
     }
@@ -251,7 +257,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         rng.gen::<f32>() <= self.mutation_settings.mutation_rate
     }
 
-    pub fn random_location_in_scope(&self, rng: &mut impl Rng, scope: NeuronScope) -> NeuronLocation {
+    pub fn random_location_in_scope(
+        &self,
+        rng: &mut impl Rng,
+        scope: NeuronScope,
+    ) -> NeuronLocation {
         let loc = self.random_location(rng);
 
         // this is a lazy and slow way of donig it, TODO better version.
@@ -286,7 +296,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             panic!("Can only remove neurons from hidden layer");
         }
 
-        unsafe { self.downshift_connections(loc.unwrap()); }
+        unsafe {
+            self.downshift_connections(loc.unwrap());
+        }
     }
 
     unsafe fn downshift_connections(&mut self, i: usize) {
@@ -301,15 +313,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     pub fn map_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
         for n in &mut self.input_layer {
-            n.outputs
-                .par_iter_mut()
-                .for_each(|(_, w)| callback(w));
+            n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
         }
 
         for n in &mut self.hidden_layers {
-            n.outputs
-                .par_iter_mut()
-                .for_each(|(_, w)| callback(w));
+            n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
         }
     }
 }
@@ -347,12 +355,12 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
                 let a = self.get_neuron(from);
                 let (to, _) = a.random_output(rng);
-                
+
                 self.remove_connection(Connection { from, to });
             }
 
             let mutation_rate = self.mutation_settings.mutation_rate;
-            self.map_weights(| w| {
+            self.map_weights(|w| {
                 let mut rng = rand::thread_rng();
 
                 // TODO common should_mutate abstraction that doesn't require cloning self.
@@ -382,7 +390,7 @@ pub trait Predict<const I: usize, const O: usize> {
 impl<const I: usize, const O: usize> Predict<I, O> for NeuralNetwork<I, O> {
     fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         let net2 = Arc::new(self.clone());
-        
+
         // TODO prob disambiguate between trait types. also should find a way around the clone.
         net2.predict(inputs)
     }
@@ -478,7 +486,12 @@ impl Neuron {
         None
     }
 
-    pub fn mutate_weight(&mut self, output: impl AsRef<NeuronLocation>, rate: f32, rng: &mut impl Rng) -> Option<f32> {
+    pub fn mutate_weight(
+        &mut self,
+        output: impl AsRef<NeuronLocation>,
+        rate: f32,
+        rng: &mut impl Rng,
+    ) -> Option<f32> {
         let loc = *output.as_ref();
         let mut i = 0;
 
@@ -503,11 +516,11 @@ impl Neuron {
     pub(crate) fn downshift_outputs(&mut self, i: usize) {
         replace_with_or_abort(&mut self.outputs, |o| {
             o.into_par_iter()
-            .map(|(loc, w)| match loc {
-                NeuronLocation::Hidden(j) if j > i => (NeuronLocation::Hidden(j-1), w),
-                _ => (loc, w)
-            })
-            .collect()
+                .map(|(loc, w)| match loc {
+                    NeuronLocation::Hidden(j) if j > i => (NeuronLocation::Hidden(j - 1), w),
+                    _ => (loc, w),
+                })
+                .collect()
         });
     }
 }

@@ -128,11 +128,7 @@ pub struct ActivationFn {
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(
-        func: Arc<dyn Activation + Send + Sync>,
-        scope: NeuronScope,
-        name: String,
-    ) -> Self {
+    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: String) -> Self {
         Self { func, name, scope }
     }
 }
