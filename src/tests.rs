@@ -1,4 +1,7 @@
+use std::sync::atomic::{AtomicBool, AtomicUsize};
+
 use crate::*;
+use atomic_float::AtomicF32;
 use rand::prelude::*;
 
 // no support for tuple structs derive in genetic-rs yet :(
@@ -45,6 +48,8 @@ fn fitness(agent: &Agent) -> f32 {
 
     let mut fitness = 0.;
 
+    // println!("Started fitness game");
+
     // 10 games for consistency
     for _ in 0..10 {
         let game = GuessTheNumber::new(&mut rng);
@@ -63,8 +68,10 @@ fn fitness(agent: &Agent) -> f32 {
                 break;
             }
 
+            // println!("started prediction");
             let [cur_guess] = agent.0.predict([last_guess, last_result, last_guess_2, last_result_2]);
             let cur_result = game.guess(cur_guess);
+            // println!("finished prediction");
 
             if let Some(result) = cur_result {
                 last_guess = last_guess_2;
@@ -84,6 +91,8 @@ fn fitness(agent: &Agent) -> f32 {
         }
     }
 
+    // println!("Ended fitness game");
+
     fitness
 }
 
@@ -102,4 +111,37 @@ fn division() {
     );
 
     sim.perform_generations(100);
+}
+
+#[test]
+fn neural_net_cache_sync() {
+    let cache = NeuralNetCache {
+        input_layer: [NeuronCache::new(0), NeuronCache::new(0)],
+        hidden_layers: vec![NeuronCache::new(2), NeuronCache::new(2), NeuronCache::new(2)],
+        output_layer: [NeuronCache::new(3), NeuronCache::new(3)],
+    };
+
+    for i in 0..2 {
+        let input_loc = NeuronLocation::Input(i);
+        cache.add(&input_loc, 1.0);
+
+        assert!(cache.claim(input_loc));
+        
+        for j in 0..3 {
+            cache.add(NeuronLocation::Hidden(j), f32::tanh(cache.get(&input_loc) * 1.2));
+        }
+    }
+
+    for i in 0..3 {
+        let hidden_loc = NeuronLocation::Hidden(i);
+
+        assert!(cache.is_ready(&hidden_loc));
+        assert!(cache.claim(&hidden_loc));
+
+        for j in 0..2 {
+            cache.add(NeuronLocation::Output(j), activation::builtin::sigmoid(cache.get(&hidden_loc) * 0.7));
+        }
+    }
+
+    assert_eq!(cache.output(), [2.2878702, 2.2878702]);
 }

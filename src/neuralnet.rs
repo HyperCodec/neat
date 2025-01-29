@@ -44,7 +44,6 @@ impl Default for MutationSettings {
     }
 }
 
-// TODO serde
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
@@ -100,8 +99,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let input_layer = input_layer.try_into().unwrap();
         let output_layer = output_layer.try_into().unwrap();
 
-        // dbg!(&input_layer);
-
         Self {
             input_layer,
             hidden_layers: vec![],
@@ -110,18 +107,18 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
-        let cache = Arc::new(NeuralNetCache::from(self));
+    pub fn predict(self: Arc<Self>, inputs: [f32; I]) -> [f32; O] {
+        let cache = Arc::new(NeuralNetCache::from(self.as_ref()));
         cache.prime_inputs(inputs);
 
         (0..I)
             .into_par_iter()
-            .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
+            .for_each(|i| self.clone().eval(NeuronLocation::Input(i), cache.clone()));
 
         cache.output()
     }
 
-    fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
+    fn eval(self: Arc<Self>, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
 
         if !cache.claim(loc) {
@@ -131,10 +128,23 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return;
         }
 
-        while !cache.is_ready(loc) {
+        // loc sucessfully claimed, perform inner eval
+        self.inner_eval(loc, cache);
+    }
+
+    fn inner_eval(self: Arc<Self>, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
+        // separated from `eval` because of the claiming system and recursion.
+        
+        let loc = loc.as_ref();
+        if !cache.is_ready(loc) {
             // essentially spinlocks until the dependency tasks are complete,
             // while letting this thread do some work on random tasks.
-            rayon::yield_now().unwrap();
+            let loc2 = loc.clone();
+            rayon::spawn(move || {
+                // send it to the back of the task queue
+                self.inner_eval(loc2, cache);
+            });
+            return;
         }
 
         let val = cache.get(loc);
@@ -142,7 +152,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         n.outputs.par_iter().for_each(|(loc2, weight)| {
             cache.add(loc2, n.activate(val * weight));
-            self.eval(loc2, cache.clone());
+            self.clone().eval(loc2, cache.clone());
         });
     }
 
@@ -365,6 +375,19 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
     }
 }
 
+pub trait Predict<const I: usize, const O: usize> {
+    fn predict(&self, inputs: [f32; I]) -> [f32; O];
+}
+
+impl<const I: usize, const O: usize> Predict<I, O> for NeuralNetwork<I, O> {
+    fn predict(&self, inputs: [f32; I]) -> [f32; O] {
+        let net2 = Arc::new(self.clone());
+        
+        // TODO prob disambiguate between trait types. also should find a way around the clone.
+        net2.predict(inputs)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Connection {
@@ -535,12 +558,21 @@ impl AsRef<NeuronLocation> for NeuronLocation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct NeuronCache {
     pub value: AtomicF32,
     pub expected_inputs: usize,
-    pub total_inputs: AtomicUsize,
+    pub finished_inputs: AtomicUsize,
     pub claimed: AtomicBool,
+}
+
+impl NeuronCache {
+    pub fn new(expected_inputs: usize) -> Self {
+        Self {
+            expected_inputs,
+            ..Default::default()
+        }
+    }
 }
 
 impl From<&Neuron> for NeuronCache {
@@ -548,7 +580,7 @@ impl From<&Neuron> for NeuronCache {
         Self {
             value: AtomicF32::new(value.bias),
             expected_inputs: value.input_count,
-            total_inputs: AtomicUsize::new(0),
+            finished_inputs: AtomicUsize::new(0),
             claimed: AtomicBool::new(false),
         }
     }
@@ -576,13 +608,13 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
             NeuronLocation::Hidden(i) => {
                 let c = &self.hidden_layers[*i];
                 let v = c.value.fetch_add(n, Ordering::SeqCst);
-                c.total_inputs.fetch_add(1, Ordering::SeqCst);
+                c.finished_inputs.fetch_add(1, Ordering::SeqCst);
                 v
             }
             NeuronLocation::Output(i) => {
                 let c = &self.output_layer[*i];
                 let v = c.value.fetch_add(n, Ordering::SeqCst);
-                c.total_inputs.fetch_add(1, Ordering::SeqCst);
+                c.finished_inputs.fetch_add(1, Ordering::SeqCst);
                 v
             }
         }
@@ -592,15 +624,15 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         match loc.as_ref() {
             NeuronLocation::Input(i) => {
                 let c = &self.input_layer[*i];
-                c.expected_inputs >= c.total_inputs.load(Ordering::SeqCst)
+                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
             }
             NeuronLocation::Hidden(i) => {
                 let c = &self.hidden_layers[*i];
-                c.expected_inputs >= c.total_inputs.load(Ordering::SeqCst)
+                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
             }
             NeuronLocation::Output(i) => {
                 let c = &self.output_layer[*i];
-                c.expected_inputs >= c.total_inputs.load(Ordering::SeqCst)
+                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
             }
         }
     }
@@ -642,15 +674,12 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
 impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCache<I, O> {
     fn from(net: &NeuralNetwork<I, O>) -> Self {
         let input_layer: Vec<_> = net.input_layer.par_iter().map(|n| n.into()).collect();
-
         let input_layer = input_layer.try_into().unwrap();
 
         let hidden_layers: Vec<_> = net.hidden_layers.par_iter().map(|n| n.into()).collect();
-
         let hidden_layers = hidden_layers.try_into().unwrap();
 
         let output_layer: Vec<_> = net.output_layer.par_iter().map(|n| n.into()).collect();
-
         let output_layer = output_layer.try_into().unwrap();
 
         Self {
