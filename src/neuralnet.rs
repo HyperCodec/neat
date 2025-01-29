@@ -567,8 +567,9 @@ pub struct NeuronCache {
 }
 
 impl NeuronCache {
-    pub fn new(expected_inputs: usize) -> Self {
+    pub fn new(bias: f32, expected_inputs: usize) -> Self {
         Self {
+            value: AtomicF32::new(bias),
             expected_inputs,
             ..Default::default()
         }

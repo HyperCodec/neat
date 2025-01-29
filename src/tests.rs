@@ -116,16 +116,15 @@ fn division() {
 #[test]
 fn neural_net_cache_sync() {
     let cache = NeuralNetCache {
-        input_layer: [NeuronCache::new(0), NeuronCache::new(0)],
-        hidden_layers: vec![NeuronCache::new(2), NeuronCache::new(2), NeuronCache::new(2)],
-        output_layer: [NeuronCache::new(3), NeuronCache::new(3)],
+        input_layer: [NeuronCache::new(0.3, 0), NeuronCache::new(0.25, 0)],
+        hidden_layers: vec![NeuronCache::new(0.2, 2), NeuronCache::new(0.0, 2), NeuronCache::new(1.5, 2)],
+        output_layer: [NeuronCache::new(0.0, 3), NeuronCache::new(0.0, 3)],
     };
 
     for i in 0..2 {
         let input_loc = NeuronLocation::Input(i);
-        cache.add(&input_loc, 1.0);
 
-        assert!(cache.claim(input_loc));
+        assert!(cache.claim(&input_loc));
         
         for j in 0..3 {
             cache.add(NeuronLocation::Hidden(j), f32::tanh(cache.get(&input_loc) * 1.2));
@@ -143,5 +142,5 @@ fn neural_net_cache_sync() {
         }
     }
 
-    assert_eq!(cache.output(), [2.2878702, 2.2878702]);
+    assert_eq!(cache.output(), [2.0688455, 2.0688455]);
 }
