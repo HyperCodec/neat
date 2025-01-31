@@ -48,8 +48,6 @@ fn fitness(agent: &Agent) -> f32 {
 
     let mut fitness = 0.;
 
-    // println!("Started fitness game");
-
     // 10 games for consistency
     for _ in 0..10 {
         let game = GuessTheNumber::new(&mut rng);
@@ -68,13 +66,11 @@ fn fitness(agent: &Agent) -> f32 {
                 break;
             }
 
-            // println!("started prediction");
             let [cur_guess] =
                 agent
                     .0
                     .predict([last_guess, last_result, last_guess_2, last_result_2]);
             let cur_result = game.guess(cur_guess);
-            // println!("finished prediction");
 
             if let Some(result) = cur_result {
                 last_guess = last_guess_2;
@@ -93,8 +89,6 @@ fn fitness(agent: &Agent) -> f32 {
             break;
         }
     }
-
-    // println!("Ended fitness game");
 
     fitness
 }

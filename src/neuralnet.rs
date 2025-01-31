@@ -85,7 +85,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                     while already_chosen.contains(&j) {
                         j = rng.gen_range(0..O);
                     }
-
+                    
+                    output_layer[j].input_count += 1;
                     // output_layer[j].inputs.insert(NeuronLocation::Input(i));
                     already_chosen.push(j);
 
