@@ -1,7 +1,4 @@
-use std::sync::atomic::{AtomicBool, AtomicUsize};
-
 use crate::*;
-use atomic_float::AtomicF32;
 use rand::prelude::*;
 
 // no support for tuple structs derive in genetic-rs yet :(

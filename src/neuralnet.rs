@@ -7,7 +7,6 @@ use std::{
 };
 
 use atomic_float::AtomicF32;
-use bitflags::bitflags;
 use genetic_rs::prelude::*;
 use rand::Rng;
 use replace_with::replace_with_or_abort;
@@ -87,7 +86,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                     }
                     
                     output_layer[j].input_count += 1;
-                    // output_layer[j].inputs.insert(NeuronLocation::Input(i));
                     already_chosen.push(j);
 
                     (NeuronLocation::Output(j), rng.gen())
@@ -112,18 +110,18 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    pub fn predict(self: Arc<Self>, inputs: [f32; I]) -> [f32; O] {
-        let cache = Arc::new(NeuralNetCache::from(self.as_ref()));
+    pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
+        let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
 
-        (0..I)
-            .into_par_iter()
-            .for_each(|i| self.clone().eval(NeuronLocation::Input(i), cache.clone()));
+            (0..I)
+                .into_par_iter()
+                .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
 
         cache.output()
     }
 
-    fn eval(self: Arc<Self>, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
+    fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
 
         if !cache.claim(loc) {
@@ -133,27 +131,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return;
         }
 
-        // loc sucessfully claimed, perform inner eval
-        self.inner_eval(loc, cache);
-    }
-
-    fn inner_eval(
-        self: Arc<Self>,
-        loc: impl AsRef<NeuronLocation>,
-        cache: Arc<NeuralNetCache<I, O>>,
-    ) {
-        // separated from `eval` because of the claiming system and recursion.
-
         let loc = loc.as_ref();
-        if !cache.is_ready(loc) {
+        while !cache.is_ready(loc) {
             // essentially spinlocks until the dependency tasks are complete,
             // while letting this thread do some work on random tasks.
-            let loc2 = loc.clone();
-            rayon::spawn(move || {
-                // send it to the back of the task queue
-                self.inner_eval(loc2, cache);
-            });
-            return;
+            rayon::yield_now();
         }
 
         let val = cache.get(loc);
@@ -161,7 +143,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         n.outputs.par_iter().for_each(|(loc2, weight)| {
             cache.add(loc2, n.activate(val * weight));
-            self.clone().eval(loc2, cache.clone());
+            self.eval(loc2, cache.clone());
         });
     }
 
@@ -381,19 +363,6 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
         child.mutate(child.mutation_settings.mutation_rate, rng);
 
         child
-    }
-}
-
-pub trait Predict<const I: usize, const O: usize> {
-    fn predict(&self, inputs: [f32; I]) -> [f32; O];
-}
-
-impl<const I: usize, const O: usize> Predict<I, O> for NeuralNetwork<I, O> {
-    fn predict(&self, inputs: [f32; I]) -> [f32; O] {
-        let net2 = Arc::new(self.clone());
-
-        // TODO prob disambiguate between trait types. also should find a way around the clone.
-        net2.predict(inputs)
     }
 }
 
@@ -701,40 +670,6 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
             input_layer,
             hidden_layers,
             output_layer,
-        }
-    }
-}
-
-bitflags! {
-    /// Specifies where an activation function can occur
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub struct NeuronScope: u8 {
-        /// Whether the activation can be applied to the input layer.
-        const INPUT = 0b001;
-
-        /// Whether the activation can be applied to the hidden layer.
-        const HIDDEN = 0b010;
-
-        /// Whether the activation can be applied to the output layer.
-        const OUTPUT = 0b100;
-
-        /// The activation function will not be randomly placed anywhere
-        const NONE = 0b000;
-    }
-}
-
-impl Default for NeuronScope {
-    fn default() -> Self {
-        Self::HIDDEN
-    }
-}
-
-impl<L: AsRef<NeuronLocation>> From<L> for NeuronScope {
-    fn from(value: L) -> Self {
-        match value.as_ref() {
-            NeuronLocation::Input(_) => Self::INPUT,
-            NeuronLocation::Hidden(_) => Self::HIDDEN,
-            NeuronLocation::Output(_) => Self::OUTPUT,
         }
     }
 }

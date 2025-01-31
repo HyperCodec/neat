@@ -1,6 +1,7 @@
 pub mod builtin;
 
 use builtin::*;
+use bitflags::bitflags;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -12,7 +13,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::NeuronScope;
+use crate::NeuronLocation;
 
 /// Creates an [`ActivationFn`] object from a function
 #[macro_export]
@@ -169,5 +170,39 @@ impl<'a> Deserialize<'a> for ActivationFn {
         }
 
         Ok(f.unwrap().clone())
+    }
+}
+
+bitflags! {
+    /// Specifies where an activation function can occur
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub struct NeuronScope: u8 {
+        /// Whether the activation can be applied to the input layer.
+        const INPUT = 0b001;
+
+        /// Whether the activation can be applied to the hidden layer.
+        const HIDDEN = 0b010;
+
+        /// Whether the activation can be applied to the output layer.
+        const OUTPUT = 0b100;
+
+        /// The activation function will not be randomly placed anywhere
+        const NONE = 0b000;
+    }
+}
+
+impl Default for NeuronScope {
+    fn default() -> Self {
+        Self::HIDDEN
+    }
+}
+
+impl<L: AsRef<NeuronLocation>> From<L> for NeuronScope {
+    fn from(value: L) -> Self {
+        match value.as_ref() {
+            NeuronLocation::Input(_) => Self::INPUT,
+            NeuronLocation::Hidden(_) => Self::HIDDEN,
+            NeuronLocation::Output(_) => Self::OUTPUT,
+        }
     }
 }
