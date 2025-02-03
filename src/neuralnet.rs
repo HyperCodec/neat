@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
 
+/// The mutation settings for [`NeuralNetwork`].
+/// Does not affect [`NeuralNetwork::mutate`], only [`NeuralNetwork::divide`] and [`NeuralNetwork::crossover`].
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct MutationSettings {
@@ -47,22 +49,32 @@ impl Default for MutationSettings {
     }
 }
 
+/// An abstract neural network type with `I` input neurons and `O` output neurons.
+/// Hidden neurons are not organized into layers, but rather float and link freely
+/// (or at least in any way that doesn't cause a cyclic dependency).
+/// 
+/// See [`NeuralNetwork::predict`] for usage.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
+    /// The input layer of neurons. Values specified in [`NeuralNetwork::predict`] will start here.
     #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     pub input_layer: [Neuron; I],
 
+    /// The hidden layer(s) of neurons. They are not actually layered, but rather free-floating.
     pub hidden_layers: Vec<Neuron>,
 
+    /// The output layer of neurons. Their values will be returned from [`NeuralNetwork::predict`].
     #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     pub output_layer: [Neuron; O],
 
+    /// The mutation settings for the network.
     pub mutation_settings: MutationSettings,
 }
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     // TODO option to set default output layer activations
+    /// Creates a new random neural network with the given settings.
     pub fn new(mutation_settings: MutationSettings, rng: &mut impl Rng) -> Self {
         let mut output_layer = Vec::with_capacity(O);
 
@@ -110,6 +122,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Runs the neural network, propagating values from input to output layer.
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
@@ -147,6 +160,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         });
     }
 
+    /// Get a neuron at the specified [`NeuronLocation`].
     pub fn get_neuron(&self, loc: impl AsRef<NeuronLocation>) -> &Neuron {
         match loc.as_ref() {
             NeuronLocation::Input(i) => &self.input_layer[*i],
@@ -155,6 +169,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Get a mutable reference to the neuron at the specified [`NeuronLocation`].
     pub fn get_neuron_mut(&mut self, loc: impl AsRef<NeuronLocation>) -> &mut Neuron {
         match loc.as_ref() {
             NeuronLocation::Input(i) => &mut self.input_layer[*i],
@@ -163,6 +178,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Split a [`Connection`] into two of the same weight, joined by a new [`Neuron`] in the hidden layer(s).
     pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
         let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
 
@@ -175,7 +191,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.hidden_layers.push(n);
     }
 
-    /// Adds a connection but does not check for cyclic linkages. Could cause a hang/deadlock when predicting.
+    /// Adds a connection but does not check for cyclic linkages.
+    /// Marked as unsafe because it could cause a hang/livelock when predicting due to cyclic linkage.
+    /// There is no actual UB or unsafe code associated with it.
     pub unsafe fn add_connection_raw(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.push((connection.to, weight));
@@ -207,7 +225,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         true
     }
 
-    /// Safe, checked add connection method. Returns whether it performed the connection.
+    /// Safe, checked add connection method. Returns false if it aborted connecting due to cyclic linkage.
     pub fn add_connection(&mut self, connection: Connection, weight: f32) -> bool {
         if !self.is_connection_safe(connection) {
             return false;
@@ -220,12 +238,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         true
     }
 
+    /// Mutates a connection's weight.
     pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
         let rate = self.mutation_settings.weight_mutation_amount;
         let n = self.get_neuron_mut(connection.from);
         n.mutate_weight(connection.to, rate, rng).unwrap();
     }
 
+    /// Get a random valid location within the network.
     pub fn random_location(&self, rng: &mut impl Rng) -> NeuronLocation {
         match rng.gen_range(0..3) {
             0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
@@ -235,11 +255,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    /// Get a random boolean with a probability of [`mutation_rate`](MutationSettings::mutation_rate)
-    pub fn should_mutate(&self, rng: &mut impl Rng) -> bool {
-        rng.gen::<f32>() <= self.mutation_settings.mutation_rate
-    }
-
+    /// Get a random valid location within a [`NeuronScope`].
     pub fn random_location_in_scope(
         &self,
         rng: &mut impl Rng,
@@ -294,6 +310,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             .for_each(|n| n.downshift_outputs(i));
     }
 
+    // TODO maybe more parallelism and pass Connection info.
+    /// Runs the `callback` on the weights of the neural network in parallel, allowing it to modify weight values.
     pub fn map_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
         for n in &mut self.input_layer {
             n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
@@ -345,8 +363,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
-        for _ in 0..self.mutation_settings.mutation_passes {
-            if self.should_mutate(rng) {
+            if rng.gen::<f32>() <= rate {
                 // split connection
                 let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
                 let n = self.get_neuron(from);
@@ -355,7 +372,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 self.split_connection(Connection { from, to }, rng);
             }
 
-            if self.should_mutate(rng) {
+            if rng.gen::<f32>() <= rate {
                 // add connection
                 let weight = rng.gen::<f32>();
 
@@ -370,7 +387,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 }
             }
 
-            if self.should_mutate(rng) {
+            if rng.gen::<f32>() <= rate {
                 // remove connection
 
                 let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
@@ -380,25 +397,24 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 self.remove_connection(Connection { from, to });
             }
 
-            let mutation_rate = self.mutation_settings.mutation_rate;
             self.map_weights(|w| {
+                // TODO maybe `Send`able rng.
                 let mut rng = rand::thread_rng();
 
-                // TODO common should_mutate abstraction that doesn't require cloning self.
-                // probably just make it a separate function.
-                if rng.gen::<f32>() <= mutation_rate {
+                if rng.gen::<f32>() <= rate {
                     *w += rng.gen_range(-rate..rate);
                 }
             });
         }
-    }
 }
 
 impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O> {
     fn divide(&self, rng: &mut impl Rng) -> Self {
         let mut child = self.clone();
 
-        child.mutate(child.mutation_settings.mutation_rate, rng);
+        for _ in 0..self.mutation_settings.mutation_passes {
+            child.mutate(child.mutation_settings.mutation_rate, rng);
+        }
 
         child
     }
@@ -458,10 +474,13 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
             mutation_settings,
         };
 
-        // TODO maybe find a way to do this while doing crossover stuff. would be annoying to implement though.
+        // TODO maybe find a way to do this while doing crossover stuff instead of recalculating everything.
+        // would be annoying to implement though.
         child.recalculate_input_counts();
 
-        child.mutate(child.mutation_settings.mutation_rate, rng);
+        for _ in 0..child.mutation_settings.mutation_passes {
+            child.mutate(child.mutation_settings.mutation_rate, rng);
+        }
 
         child
     }
@@ -475,23 +494,37 @@ fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> b
     }
 }
 
+/// A helper struct for operations on connections between neurons.
+/// It does not contain information about the weight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Connection {
+    /// The source of the connection.
     pub from: NeuronLocation,
+
+    /// The destination of the connection.
     pub to: NeuronLocation,
 }
 
+/// A stateless neuron. Contains info about bias, activation, and connections.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Neuron {
+    /// The input count used in [`NeuralNetCache`]. Not safe to modify.
     pub input_count: usize,
+
+    /// The connections and weights to other neurons.
     pub outputs: Vec<(NeuronLocation, f32)>,
+
+    /// The initial value of the neuron.
     pub bias: f32,
+
+    /// The activation function applied to the value before propagating to [`outputs`][Neuron::outputs].
     pub activation_fn: ActivationFn,
 }
 
 impl Neuron {
+    /// Creates a new neuron with a specified activation function and outputs.
     pub fn new_with_activation(
         outputs: Vec<(NeuronLocation, f32)>,
         activation_fn: ActivationFn,
@@ -506,6 +539,7 @@ impl Neuron {
     }
 
     /// Creates a new neuron with the given output locations.
+    /// Chooses a random activation function within the specified scope.
     pub fn new(
         outputs: Vec<(NeuronLocation, f32)>,
         current_scope: NeuronScope,
@@ -517,7 +551,8 @@ impl Neuron {
         Self::new_with_activations(outputs, activations, rng)
     }
 
-    /// Takes a collection of activation functions and chooses a random one to use.
+    /// Creates a new neuron with the given outputs.
+    /// Takes a collection of activation functions and chooses a random one from them to use.
     pub fn new_with_activations(
         outputs: Vec<(NeuronLocation, f32)>,
         activations: impl IntoIterator<Item = ActivationFn>,
@@ -536,10 +571,12 @@ impl Neuron {
         )
     }
 
+    /// Runs the [activation function][Neuron::activation_fn] on the given value and returns it.
     pub fn activate(&self, v: f32) -> f32 {
         self.activation_fn.func.activate(v)
     }
 
+    /// Get the weight of the provided output location. Returns `None` if not found.
     pub fn get_weight(&self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
         let loc = *output.as_ref();
         for out in &self.outputs {
@@ -551,6 +588,8 @@ impl Neuron {
         None
     }
 
+    /// Tries to remove a connection from the neuron and returns the weight if it was found. 
+    /// Marked as unsafe because it will not update the destination's [`input_count`][Neuron::input_count].
     pub unsafe fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
         let loc = *output.as_ref();
         let mut i = 0;
@@ -565,6 +604,7 @@ impl Neuron {
         None
     }
 
+    /// Randomly mutates the specified weight with the rate.
     pub fn mutate_weight(
         &mut self,
         output: impl AsRef<NeuronLocation>,
@@ -588,6 +628,7 @@ impl Neuron {
         None
     }
 
+    /// Get a random output location and weight.
     pub fn random_output(&self, rng: &mut impl Rng) -> (NeuronLocation, f32) {
         self.outputs[rng.gen_range(0..self.outputs.len())]
     }
@@ -604,6 +645,7 @@ impl Neuron {
         });
     }
 
+    /// Removes any outputs pointing to a nonexistent neuron.
     pub fn prune_invalid_outputs(&mut self, hidden_len: usize, output_len: usize) {
         self.outputs
             .retain(|(loc, _)| output_exists(*loc, hidden_len, output_len));
@@ -656,15 +698,25 @@ impl AsRef<NeuronLocation> for NeuronLocation {
     }
 }
 
+/// Handles the state of a single neuron for [`NeuralNetCache`].
 #[derive(Debug, Default)]
 pub struct NeuronCache {
+    /// The value of the neuron.
     pub value: AtomicF32,
+
+    /// The expected input count.
     pub expected_inputs: usize,
+
+    /// The number of inputs that have finished evaluating.
     pub finished_inputs: AtomicUsize,
+
+    /// Whether or not a thread has claimed this neuron to work on it.
     pub claimed: AtomicBool,
 }
 
 impl NeuronCache {
+    /// Creates a new [`NeuronCache`] given relevant info.
+    /// Use [`NeuronCache::from`] instead to create cache for a [`Neuron`].
     pub fn new(bias: f32, expected_inputs: usize) -> Self {
         Self {
             value: AtomicF32::new(bias),
@@ -685,14 +737,21 @@ impl From<&Neuron> for NeuronCache {
     }
 }
 
+/// A cache type used in [`NeuralNetwork::predict`] to track state.
 #[derive(Debug)]
 pub struct NeuralNetCache<const I: usize, const O: usize> {
+    /// The input layer cache.
     pub input_layer: [NeuronCache; I],
+
+    /// The hidden layer(s) cache.
     pub hidden_layers: Vec<NeuronCache>,
+
+    /// The output layer cache.
     pub output_layer: [NeuronCache; O],
 }
 
 impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
+    /// Gets the value of a neuron at the given location.
     pub fn get(&self, loc: impl AsRef<NeuronLocation>) -> f32 {
         match loc.as_ref() {
             NeuronLocation::Input(i) => self.input_layer[*i].value.load(Ordering::SeqCst),
@@ -701,6 +760,7 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         }
     }
 
+    /// Adds a value to the neuron at the specified location and increments [`finished_inputs`][NeuronCache::finished_inputs].
     pub fn add(&self, loc: impl AsRef<NeuronLocation>, n: f32) -> f32 {
         match loc.as_ref() {
             NeuronLocation::Input(i) => self.input_layer[*i].value.fetch_add(n, Ordering::SeqCst),
@@ -719,6 +779,7 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         }
     }
 
+    /// Returns whether [`finished_inputs`][NeuronCache::finished_inputs] matches [`expected_inputs`][NeuronCache::expected_inputs].
     pub fn is_ready(&self, loc: impl AsRef<NeuronLocation>) -> bool {
         match loc.as_ref() {
             NeuronLocation::Input(i) => {
@@ -736,12 +797,14 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         }
     }
 
+    /// Adds the input values to the input layer of neurons.
     pub fn prime_inputs(&self, inputs: [f32; I]) {
         for (i, v) in inputs.into_iter().enumerate() {
             self.input_layer[i].value.fetch_add(v, Ordering::SeqCst);
         }
     }
 
+    /// Fetches and packs the output layer values into an array.
     pub fn output(&self) -> [f32; O] {
         let output: Vec<_> = self
             .output_layer
@@ -752,6 +815,7 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         output.try_into().unwrap()
     }
 
+    /// Attempts to claim a neuron. Returns false if it has already been claimed.
     pub fn claim(&self, loc: impl AsRef<NeuronLocation>) -> bool {
         match loc.as_ref() {
             NeuronLocation::Input(i) => self.input_layer[*i]
