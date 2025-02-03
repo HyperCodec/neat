@@ -2,7 +2,7 @@ use crate::*;
 use rand::prelude::*;
 
 // no support for tuple structs derive in genetic-rs yet :(
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct Agent(NeuralNetwork<4, 1>);
 
 impl Prunable for Agent {}
@@ -16,6 +16,12 @@ impl RandomlyMutable for Agent {
 impl DivisionReproduction for Agent {
     fn divide(&self, rng: &mut impl rand::Rng) -> Self {
         Self(self.0.divide(rng))
+    }
+}
+
+impl CrossoverReproduction for Agent {
+    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+        Self(self.0.crossover(&other.0, rng))
     }
 }
 
@@ -67,6 +73,7 @@ fn fitness(agent: &Agent) -> f32 {
                 agent
                     .0
                     .predict([last_guess, last_result, last_guess_2, last_result_2]);
+            
             let cur_result = game.guess(cur_guess);
 
             if let Some(result) = cur_result {
@@ -99,6 +106,19 @@ fn division() {
         .collect();
 
     let mut sim = GeneticSim::new(starting_genomes, fitness, division_pruning_nextgen);
+
+    sim.perform_generations(100);
+}
+
+#[test]
+fn crossover() {
+    let mut rng = rand::thread_rng();
+
+    let starting_genomes = (0..100)
+        .map(|_| Agent(NeuralNetwork::new(MutationSettings::default(), &mut rng)))
+        .collect();
+
+    let mut sim = GeneticSim::new(starting_genomes, fitness, crossover_pruning_nextgen);
 
     sim.perform_generations(100);
 }

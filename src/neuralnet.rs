@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_big_array::BigArray;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MutationSettings {
     /// The chance of each mutation type to occur.
     pub mutation_rate: f32,
@@ -47,7 +47,7 @@ impl Default for MutationSettings {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct NeuralNetwork<const I: usize, const O: usize> {
     #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
@@ -303,6 +303,38 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
         }
     }
+
+    unsafe fn clear_input_counts(&mut self) {
+        // not sure whether all this parallelism is necessary or if it will just generate overhead
+        // rayon::scope(|s| {
+        //     s.spawn(|_| self.input_layer.par_iter_mut().for_each(|n| n.input_count = 0));
+        //     s.spawn(|_| self.hidden_layers.par_iter_mut().for_each(|n| n.input_count = 0));
+        //     s.spawn(|_| self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0));
+        // });
+
+        self.input_layer.par_iter_mut().for_each(|n| n.input_count = 0);
+        self.hidden_layers.par_iter_mut().for_each(|n| n.input_count = 0);
+        self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0);
+    }
+
+    /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network.
+    pub fn recalculate_input_counts(&mut self) {
+        unsafe { self.clear_input_counts() };
+
+        for i in 0..I {
+            for j in 0..self.input_layer[i].outputs.len() {
+                let (loc, _) = self.input_layer[i].outputs[j];
+                self.get_neuron_mut(loc).input_count += 1;
+            }
+        }
+
+        for i in 0..self.hidden_layers.len() {
+            for j in 0..self.hidden_layers[i].outputs.len() {
+                let (loc, _) = self.hidden_layers[i].outputs[j];
+                self.get_neuron_mut(loc).input_count += 1;
+            }
+        }
+    }
 }
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
@@ -366,6 +398,81 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
     }
 }
 
+impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, O> {
+    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+        let mut output_layer = self.output_layer.clone();
+
+        for (i, n) in output_layer.iter_mut().enumerate() {
+            if rng.gen::<f32>() >= 0.5 {
+                *n = other.output_layer[i].clone();
+            }
+        }
+
+        let hidden_len = self.hidden_layers.len().max(other.hidden_layers.len());
+        let mut hidden_layers = Vec::with_capacity(hidden_len);
+
+        for i in 0..hidden_len {
+            if rng.gen::<f32>() >= 0.5 {
+                if let Some(n) = self.hidden_layers.get(i) {
+                    let mut n = n.clone();
+                    n.prune_invalid_outputs(hidden_len, O);
+
+                    hidden_layers[i] = n;
+
+                    continue;
+                }
+            }
+
+            let mut n = other.hidden_layers[i].clone();
+            n.prune_invalid_outputs(hidden_len, O);
+
+            hidden_layers[i] = n;
+        }
+
+        let mut input_layer = self.input_layer.clone();
+
+        for (i, n) in input_layer.iter_mut().enumerate() {
+            if rng.gen::<f32>() >= 0.5 {
+                *n = other.input_layer[i].clone();
+            }
+            n.prune_invalid_outputs(hidden_len, O);
+        }
+
+        // crossover mutation settings just in case.
+        let mutation_settings = if rng.gen::<f32>() >= 0.5 {
+            self.mutation_settings.clone()
+        } else {
+            other.mutation_settings.clone()
+        };
+
+        let mut child = Self {
+            input_layer,
+            hidden_layers,
+            output_layer,
+            mutation_settings,
+        };
+
+        // TODO maybe find a way to do this while doing crossover stuff. would be annoying to implement though.
+        child.recalculate_input_counts();
+
+        child.mutate(child.mutation_settings.mutation_rate, rng);
+
+        child
+    }
+}
+
+fn output_exists(
+    loc: NeuronLocation,
+    hidden_len: usize,
+    output_len: usize,
+) -> bool {
+    match loc {
+        NeuronLocation::Input(_) => false,
+        NeuronLocation::Hidden(i) => i < hidden_len,
+        NeuronLocation::Output(i) => i < output_len,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Connection {
@@ -373,7 +480,7 @@ pub struct Connection {
     pub to: NeuronLocation,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Neuron {
     pub input_count: usize,
@@ -417,7 +524,7 @@ impl Neuron {
         // TODO get random in iterator form
         let mut activations: Vec<_> = activations.into_iter().collect();
 
-        // might want to remove this later.
+        // TODO actual error hnadling
         assert!(!activations.is_empty());
 
         Self::new_with_activation(
@@ -428,7 +535,7 @@ impl Neuron {
     }
 
     pub fn activate(&self, v: f32) -> f32 {
-        return self.activation_fn.func.activate(v);
+        self.activation_fn.func.activate(v)
     }
 
     pub fn get_weight(&self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
@@ -484,6 +591,7 @@ impl Neuron {
     }
 
     pub(crate) fn downshift_outputs(&mut self, i: usize) {
+        // TODO par_iter_mut instead of replace
         replace_with_or_abort(&mut self.outputs, |o| {
             o.into_par_iter()
                 .map(|(loc, w)| match loc {
@@ -492,6 +600,11 @@ impl Neuron {
                 })
                 .collect()
         });
+    }
+
+    pub fn prune_invalid_outputs(&mut self, hidden_len: usize, output_len: usize) {
+        self.outputs
+            .retain(|(loc, _)| output_exists(*loc, hidden_len, output_len));
     }
 }
 
