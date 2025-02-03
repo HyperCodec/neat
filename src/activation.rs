@@ -1,3 +1,4 @@
+/// Contains some builtin activation functions ([`sigmoid`], [`relu`], etc.)
 pub mod builtin;
 
 use bitflags::bitflags;
