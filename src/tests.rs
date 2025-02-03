@@ -8,7 +8,7 @@ struct Agent(NeuralNetwork<4, 1>);
 impl Prunable for Agent {}
 
 impl RandomlyMutable for Agent {
-    fn mutate(&mut self, rate: f32, rng: &mut impl rand::Rng) {
+    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
         self.0.mutate(rate, rng);
     }
 }
@@ -121,6 +121,19 @@ fn crossover() {
     let mut sim = GeneticSim::new(starting_genomes, fitness, crossover_pruning_nextgen);
 
     sim.perform_generations(100);
+}
+
+#[cfg(feature = "serde")]
+#[test]
+fn serde() {
+    let mut rng = rand::thread_rng();
+    let net: NeuralNetwork<5, 10> = NeuralNetwork::new(MutationSettings::default(), &mut rng);
+
+    let text = serde_json::to_string(&net).unwrap();
+
+    let net2: NeuralNetwork<5, 10> = serde_json::from_str(&text).unwrap();
+
+    assert_eq!(net, net2);
 }
 
 #[test]

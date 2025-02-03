@@ -25,11 +25,13 @@ serde = ["dep:serde", "dep:serde-big-array"]
 
 [dependencies]
 atomic_float = "1.1.0"
-bitflags = "2.6.0"
+bitflags = "2.8.0"
 genetic-rs = { version = "0.5.4", features = ["rayon", "derive"] }
 lazy_static = "1.5.0"
-rand = "0.8.5"
 rayon = "1.10.0"
 replace_with = "0.1.7"
-serde = { version = "1.0.215", features = ["derive"], optional = true }
+serde = { version = "1.0.217", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
+
+[dev-dependencies]
+serde_json = "1.0.138"
