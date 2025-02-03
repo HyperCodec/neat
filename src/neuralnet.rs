@@ -52,7 +52,7 @@ impl Default for MutationSettings {
 /// An abstract neural network type with `I` input neurons and `O` output neurons.
 /// Hidden neurons are not organized into layers, but rather float and link freely
 /// (or at least in any way that doesn't cause a cyclic dependency).
-/// 
+///
 /// See [`NeuralNetwork::predict`] for usage.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -363,49 +363,49 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
-            if rng.gen::<f32>() <= rate {
-                // split connection
-                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let n = self.get_neuron(from);
-                let (to, _) = n.random_output(rng);
+        if rng.gen::<f32>() <= rate {
+            // split connection
+            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+            let n = self.get_neuron(from);
+            let (to, _) = n.random_output(rng);
 
-                self.split_connection(Connection { from, to }, rng);
-            }
+            self.split_connection(Connection { from, to }, rng);
+        }
 
-            if rng.gen::<f32>() <= rate {
-                // add connection
-                let weight = rng.gen::<f32>();
+        if rng.gen::<f32>() <= rate {
+            // add connection
+            let weight = rng.gen::<f32>();
 
+            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+            let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
+
+            let mut connection = Connection { from, to };
+            while !self.add_connection(connection, weight) {
                 let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
                 let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-
-                let mut connection = Connection { from, to };
-                while !self.add_connection(connection, weight) {
-                    let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                    let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-                    connection = Connection { from, to };
-                }
+                connection = Connection { from, to };
             }
+        }
+
+        if rng.gen::<f32>() <= rate {
+            // remove connection
+
+            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+            let a = self.get_neuron(from);
+            let (to, _) = a.random_output(rng);
+
+            self.remove_connection(Connection { from, to });
+        }
+
+        self.map_weights(|w| {
+            // TODO maybe `Send`able rng.
+            let mut rng = rand::thread_rng();
 
             if rng.gen::<f32>() <= rate {
-                // remove connection
-
-                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let a = self.get_neuron(from);
-                let (to, _) = a.random_output(rng);
-
-                self.remove_connection(Connection { from, to });
+                *w += rng.gen_range(-rate..rate);
             }
-
-            self.map_weights(|w| {
-                // TODO maybe `Send`able rng.
-                let mut rng = rand::thread_rng();
-
-                if rng.gen::<f32>() <= rate {
-                    *w += rng.gen_range(-rate..rate);
-                }
-            });
-        }
+        });
+    }
 }
 
 impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O> {
@@ -590,7 +590,7 @@ impl Neuron {
         None
     }
 
-    /// Tries to remove a connection from the neuron and returns the weight if it was found. 
+    /// Tries to remove a connection from the neuron and returns the weight if it was found.
     /// Marked as unsafe because it will not update the destination's [`input_count`][Neuron::input_count].
     pub unsafe fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
         let loc = *output.as_ref();
