@@ -12,7 +12,7 @@ use rand::Rng;
 use replace_with::replace_with_or_abort;
 
 use crate::{
-    activation::{builtin::*, *},
+    activation::{self, builtin::*, *},
     activation_fn,
 };
 
@@ -561,8 +561,9 @@ impl Neuron {
         // TODO get random in iterator form
         let mut activations: Vec<_> = activations.into_iter().collect();
 
-        // TODO actual error hnadling
-        assert!(!activations.is_empty());
+        if activations.is_empty() {
+            panic!("Empty activations list provided");
+        }
 
         Self::new_with_activation(
             outputs,
