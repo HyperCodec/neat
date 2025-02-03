@@ -12,7 +12,7 @@ use rand::Rng;
 use replace_with::replace_with_or_abort;
 
 use crate::{
-    activation::{self, builtin::*, *},
+    activation::{builtin::*, *},
     activation_fn,
 };
 
