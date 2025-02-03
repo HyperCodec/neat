@@ -1,7 +1,7 @@
 pub mod builtin;
 
-use builtin::*;
 use bitflags::bitflags;
+use builtin::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

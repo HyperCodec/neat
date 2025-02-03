@@ -84,7 +84,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                     while already_chosen.contains(&j) {
                         j = rng.gen_range(0..O);
                     }
-                    
+
                     output_layer[j].input_count += 1;
                     already_chosen.push(j);
 
@@ -114,9 +114,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
 
-            (0..I)
-                .into_par_iter()
-                .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
+        (0..I)
+            .into_par_iter()
+            .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
 
         cache.output()
     }
@@ -312,9 +312,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         //     s.spawn(|_| self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0));
         // });
 
-        self.input_layer.par_iter_mut().for_each(|n| n.input_count = 0);
-        self.hidden_layers.par_iter_mut().for_each(|n| n.input_count = 0);
-        self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0);
+        self.input_layer
+            .par_iter_mut()
+            .for_each(|n| n.input_count = 0);
+        self.hidden_layers
+            .par_iter_mut()
+            .for_each(|n| n.input_count = 0);
+        self.output_layer
+            .par_iter_mut()
+            .for_each(|n| n.input_count = 0);
     }
 
     /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network.
@@ -461,11 +467,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
     }
 }
 
-fn output_exists(
-    loc: NeuronLocation,
-    hidden_len: usize,
-    output_len: usize,
-) -> bool {
+fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> bool {
     match loc {
         NeuronLocation::Input(_) => false,
         NeuronLocation::Hidden(i) => i < hidden_len,

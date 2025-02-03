@@ -73,7 +73,7 @@ fn fitness(agent: &Agent) -> f32 {
                 agent
                     .0
                     .predict([last_guess, last_result, last_guess_2, last_result_2]);
-            
+
             let cur_result = game.guess(cur_guess);
 
             if let Some(result) = cur_result {
