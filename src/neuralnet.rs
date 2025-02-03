@@ -561,6 +561,7 @@ impl Neuron {
         // TODO get random in iterator form
         let mut activations: Vec<_> = activations.into_iter().collect();
 
+        // TODO maybe Result instead.
         if activations.is_empty() {
             panic!("Empty activations list provided");
         }
