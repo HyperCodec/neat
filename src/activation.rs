@@ -1,7 +1,12 @@
+/// Contains some builtin activation functions ([`sigmoid`], [`relu`], etc.)
+pub mod builtin;
+
+use bitflags::bitflags;
+use builtin::*;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use bitflags::bitflags;
 use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
@@ -15,7 +20,7 @@ use crate::NeuronLocation;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(std::sync::Arc::new($F), ActivationScope::default(), stringify!($F).into())
+        ActivationFn::new(std::sync::Arc::new($F), NeuronScope::default(), stringify!($F).into())
     };
 
     ($F: path, $S: expr) => {
@@ -73,11 +78,11 @@ impl ActivationRegistry {
     }
 
     /// Gets all activation functions that are valid for a scope.
-    pub fn activations_in_scope(&self, scope: ActivationScope) -> Vec<ActivationFn> {
+    pub fn activations_in_scope(&self, scope: NeuronScope) -> Vec<ActivationFn> {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| a.scope != ActivationScope::NONE && a.scope.contains(scope))
+            .filter(|a| !a.scope.contains(NeuronScope::NONE) && a.scope.contains(scope))
             .collect()
     }
 }
@@ -88,48 +93,15 @@ impl Default for ActivationRegistry {
             fns: HashMap::new(),
         };
 
+        // TODO add a way to disable this
         s.batch_register(activation_fn! {
-            sigmoid => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            relu => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            linear_activation => ActivationScope::INPUT | ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            f32::tanh => ActivationScope::HIDDEN | ActivationScope::OUTPUT
+            sigmoid => NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            relu => NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            linear_activation => NeuronScope::INPUT | NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            f32::tanh => NeuronScope::HIDDEN | NeuronScope::OUTPUT
         });
 
         s
-    }
-}
-
-bitflags! {
-    /// Specifies where an activation function can occur
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub struct ActivationScope: u8 {
-        /// Whether the activation can be applied to the input layer.
-        const INPUT = 0b001;
-
-        /// Whether the activation can be applied to the hidden layer.
-        const HIDDEN = 0b010;
-
-        /// Whether the activation can be applied to the output layer.
-        const OUTPUT = 0b100;
-
-        /// The activation function will not be randomly placed anywhere
-        const NONE = 0b000;
-    }
-}
-
-impl Default for ActivationScope {
-    fn default() -> Self {
-        Self::HIDDEN
-    }
-}
-
-impl From<&NeuronLocation> for ActivationScope {
-    fn from(value: &NeuronLocation) -> Self {
-        match value {
-            NeuronLocation::Input(_) => Self::INPUT,
-            NeuronLocation::Hidden(_) => Self::HIDDEN,
-            NeuronLocation::Output(_) => Self::OUTPUT,
-        }
     }
 }
 
@@ -152,17 +124,13 @@ pub struct ActivationFn {
     pub func: Arc<dyn Activation + Send + Sync>,
 
     /// The scope defining where the activation function can appear.
-    pub scope: ActivationScope,
+    pub scope: NeuronScope,
     pub(crate) name: String,
 }
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(
-        func: Arc<dyn Activation + Send + Sync>,
-        scope: ActivationScope,
-        name: String,
-    ) -> Self {
+    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: String) -> Self {
         Self { func, name, scope }
     }
 }
@@ -206,17 +174,36 @@ impl<'a> Deserialize<'a> for ActivationFn {
     }
 }
 
-/// The sigmoid activation function.
-pub fn sigmoid(n: f32) -> f32 {
-    1. / (1. + std::f32::consts::E.powf(-n))
+bitflags! {
+    /// Specifies where an activation function can occur
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub struct NeuronScope: u8 {
+        /// Whether the activation can be applied to the input layer.
+        const INPUT = 0b001;
+
+        /// Whether the activation can be applied to the hidden layer.
+        const HIDDEN = 0b010;
+
+        /// Whether the activation can be applied to the output layer.
+        const OUTPUT = 0b100;
+
+        /// The activation function will not be randomly placed anywhere
+        const NONE = 0b000;
+    }
 }
 
-/// The ReLU activation function.
-pub fn relu(n: f32) -> f32 {
-    n.max(0.)
+impl Default for NeuronScope {
+    fn default() -> Self {
+        Self::HIDDEN
+    }
 }
 
-/// Activation function that does nothing.
-pub fn linear_activation(n: f32) -> f32 {
-    n
+impl<L: AsRef<NeuronLocation>> From<L> for NeuronScope {
+    fn from(value: L) -> Self {
+        match value.as_ref() {
+            NeuronLocation::Input(_) => Self::INPUT,
+            NeuronLocation::Hidden(_) => Self::HIDDEN,
+            NeuronLocation::Output(_) => Self::OUTPUT,
+        }
+    }
 }

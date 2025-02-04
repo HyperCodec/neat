@@ -18,25 +18,19 @@ rustdoc-args = ["--cfg", "docsrs"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["max-index"]
-crossover = ["genetic-rs/crossover"]
-rayon = ["genetic-rs/rayon", "dep:rayon"]
-max-index = []
+default = []
 serde = ["dep:serde", "dep:serde-big-array"]
 
 
 [dependencies]
-bitflags = "2.5.0"
-genetic-rs = { version = "0.5.1", features = ["derive"] }
-
-lazy_static = "1.4.0"
-rand = "0.8.5"
-rayon = { version = "1.8.1", optional = true }
-serde = { version = "1.0.197", features = ["derive"], optional = true }
+atomic_float = "1.1.0"
+bitflags = "2.8.0"
+genetic-rs = { version = "0.5.4", features = ["rayon", "derive"] }
+lazy_static = "1.5.0"
+rayon = "1.10.0"
+replace_with = "0.1.7"
+serde = { version = "1.0.217", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
-bincode = "1.3.3"
-serde_json = "1.0.114"
-plotters = "0.3.5"
-indicatif = "0.17.8"
+serde_json = "1.0.138"
