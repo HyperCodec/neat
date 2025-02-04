@@ -248,6 +248,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Get a random valid location within the network.
     pub fn random_location(&self, rng: &mut impl Rng) -> NeuronLocation {
+        if self.hidden_layers.is_empty() {
+            return match rng.gen_range(0..2) {
+                0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
+                1 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
+                _ => unreachable!()
+            };
+        }
+
         match rng.gen_range(0..3) {
             0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
             1 => NeuronLocation::Hidden(rng.gen_range(0..self.hidden_layers.len())),
@@ -281,7 +289,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
 
-        if b.input_count == 0 {
+        if b.input_count == 0 && !connection.to.is_output() {
             self.remove_neuron(connection.to);
             return true;
         }
@@ -549,6 +557,8 @@ impl Neuron {
     ) -> Self {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
         let activations = reg.activations_in_scope(current_scope);
+        
+        // dbg!(current_scope, &activations);
 
         Self::new_with_activations(outputs, activations, rng)
     }

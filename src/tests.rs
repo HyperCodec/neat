@@ -25,6 +25,12 @@ impl CrossoverReproduction for Agent {
     }
 }
 
+impl GenerateRandom for Agent {
+    fn gen_random(rng: &mut impl Rng) -> Self {
+        Self(NeuralNetwork::new(MutationSettings::default(), rng))
+    }
+}
+
 struct GuessTheNumber(f32);
 
 impl GuessTheNumber {
@@ -99,11 +105,7 @@ fn fitness(agent: &Agent) -> f32 {
 
 #[test]
 fn division() {
-    let mut rng = rand::thread_rng();
-
-    let starting_genomes = (0..100)
-        .map(|_| Agent(NeuralNetwork::new(MutationSettings::default(), &mut rng)))
-        .collect();
+    let starting_genomes = Vec::gen_random(100);
 
     let mut sim = GeneticSim::new(starting_genomes, fitness, division_pruning_nextgen);
 
@@ -112,11 +114,7 @@ fn division() {
 
 #[test]
 fn crossover() {
-    let mut rng = rand::thread_rng();
-
-    let starting_genomes = (0..100)
-        .map(|_| Agent(NeuralNetwork::new(MutationSettings::default(), &mut rng)))
-        .collect();
+    let starting_genomes = Vec::gen_random(100);
 
     let mut sim = GeneticSim::new(starting_genomes, fitness, crossover_pruning_nextgen);
 
