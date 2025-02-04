@@ -144,7 +144,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return;
         }
 
-        let loc = loc.as_ref();
         while !cache.is_ready(loc) {
             // essentially spinlocks until the dependency tasks are complete,
             // while letting this thread do some work on random tasks.
@@ -192,7 +191,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Adds a connection but does not check for cyclic linkages.
-    /// Marked as unsafe because it could cause a hang/livelock when predicting due to cyclic linkage.
+    ///
+    /// # Safety
+    /// This is marked as unsafe because it could cause a hang/livelock when predicting due to cyclic linkage.
     /// There is no actual UB or unsafe code associated with it.
     pub unsafe fn add_connection_raw(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
@@ -280,7 +281,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
 
-        if b.input_count <= 0 {
+        if b.input_count == 0 {
             self.remove_neuron(connection.to);
             return true;
         }
@@ -420,6 +421,7 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
     }
 }
 
+#[allow(clippy::needless_range_loop)]
 impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, O> {
     fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
         let mut output_layer = self.output_layer.clone();
@@ -591,7 +593,10 @@ impl Neuron {
     }
 
     /// Tries to remove a connection from the neuron and returns the weight if it was found.
-    /// Marked as unsafe because it will not update the destination's [`input_count`][Neuron::input_count].
+    ///
+    /// # Safety
+    /// This is marked as unsafe because it will not update the destination's [`input_count`][Neuron::input_count].
+    /// Similar to [`add_connection_raw`][NeuralNetwork::add_connection_raw], this does not mean UB or anything.
     pub unsafe fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
         let loc = *output.as_ref();
         let mut i = 0;
@@ -841,8 +846,7 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
         let input_layer: Vec<_> = net.input_layer.par_iter().map(|n| n.into()).collect();
         let input_layer = input_layer.try_into().unwrap();
 
-        let hidden_layers: Vec<_> = net.hidden_layers.par_iter().map(|n| n.into()).collect();
-        let hidden_layers = hidden_layers.try_into().unwrap();
+        let hidden_layers = net.hidden_layers.par_iter().map(|n| n.into()).collect();
 
         let output_layer: Vec<_> = net.output_layer.par_iter().map(|n| n.into()).collect();
         let output_layer = output_layer.try_into().unwrap();
