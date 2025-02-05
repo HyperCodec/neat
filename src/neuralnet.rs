@@ -444,6 +444,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
             }
         }
 
+        // TODO cleaner code
         let hidden_len;
         let bigger;
         let smaller;
@@ -462,20 +463,20 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
 
         for i in 0..hidden_len {
             if rng.gen::<f32>() >= 0.5 {
-                if let Some(n) = bigger.hidden_layers.get(i) {
+                if let Some(n) = smaller.hidden_layers.get(i) {
                     let mut n = n.clone();
                     n.prune_invalid_outputs(hidden_len, O);
 
-                    hidden_layers[i] = n;
+                    hidden_layers.push(n);
 
                     continue;
                 }
             }
 
-            let mut n = smaller.hidden_layers[i].clone();
+            let mut n = bigger.hidden_layers[i].clone();
             n.prune_invalid_outputs(hidden_len, O);
 
-            hidden_layers[i] = n;
+            hidden_layers.push(n);
         }
 
         let mut input_layer = self.input_layer.clone();
