@@ -276,12 +276,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         loc
     }
 
-    pub fn random_connection_from_scope(&self, rng: &mut impl Rng, scope: NeuronScope) -> (Connection, f32) {
+    pub fn random_connection(&self, rng: &mut impl Rng) -> (Connection, f32) {
         let from = self.random_location(rng);
 
         let n = self.get_neuron(&from);
-        if !scope.contains(NeuronScope::from(&from)) || n.outputs.is_empty() {
-            return self.random_connection_from_scope(rng, scope);
+        if n.outputs.is_empty() {
+            return self.random_connection(rng);
         }
 
         let (to, weight) = n.random_output(rng);
@@ -384,7 +384,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         if rng.gen::<f32>() <= rate {
             // split connection
             println!("split connection");
-            let (conn, _) = self.random_connection_from_scope(rng, !NeuronScope::OUTPUT);
+            let (conn, _) = self.random_connection(rng);
             self.split_connection(conn, rng);
         }
 
@@ -407,11 +407,11 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         if rng.gen::<f32>() <= rate {
             // remove connection
             println!("removed connection");
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let a = self.get_neuron(from);
-            let (to, _) = a.random_output(rng);
 
-            self.remove_connection(Connection { from, to });
+            // providing a scope 
+            let (conn, _) = self.random_connection(rng);
+
+            self.remove_connection(conn);
         }
 
         self.map_weights(|w| {
