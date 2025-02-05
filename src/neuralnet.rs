@@ -186,7 +186,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         a.outputs.push((newloc, weight));
 
-        let n = Neuron::new(vec![(connection.to, weight)], NeuronScope::HIDDEN, rng);
+        let mut n = Neuron::new(vec![(connection.to, weight)], NeuronScope::HIDDEN, rng);
+        n.input_count += 1;
         self.hidden_layers.push(n);
     }
 
@@ -194,13 +195,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     ///
     /// # Safety
     /// This is marked as unsafe because it could cause a hang/livelock when predicting due to cyclic linkage.
-    /// There is no actual UB or unsafe code associated with it.
+    /// There is no actual UB or unsafe code associated with it. It does handle [`Neuron::input_count`] properly.
     pub unsafe fn add_connection_raw(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.push((connection.to, weight));
 
-        // let b = self.get_neuron_mut(connection.to);
-        // b.inputs.insert(connection.from);
+        let b = self.get_neuron_mut(connection.to);
+        b.input_count += 1;
     }
 
     /// Returns false if the connection is cyclic.
@@ -374,6 +375,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
         if rng.gen::<f32>() <= rate {
             // split connection
+            println!("split connection");
             let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
             let n = self.get_neuron(from);
             let (to, _) = n.random_output(rng);
@@ -383,6 +385,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 
         if rng.gen::<f32>() <= rate {
             // add connection
+            println!("added connection");
             let weight = rng.gen::<f32>();
 
             let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
@@ -398,7 +401,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 
         if rng.gen::<f32>() <= rate {
             // remove connection
-
+            println!("removed connection");
             let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
             let a = self.get_neuron(from);
             let (to, _) = a.random_output(rng);
@@ -411,6 +414,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             let mut rng = rand::thread_rng();
 
             if rng.gen::<f32>() <= rate {
+                println!("mutated weight");
                 *w += rng.gen_range(-rate..rate);
             }
         });
@@ -440,12 +444,25 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
             }
         }
 
-        let hidden_len = self.hidden_layers.len().max(other.hidden_layers.len());
+        let hidden_len;
+        let bigger;
+        let smaller;
+
+        if self.hidden_layers.len() >= other.hidden_layers.len() {
+            hidden_len = self.hidden_layers.len();
+            bigger = self;
+            smaller = other;
+        } else {
+            hidden_len = other.hidden_layers.len();
+            bigger = other;
+            smaller = self;
+        }
+
         let mut hidden_layers = Vec::with_capacity(hidden_len);
 
         for i in 0..hidden_len {
             if rng.gen::<f32>() >= 0.5 {
-                if let Some(n) = self.hidden_layers.get(i) {
+                if let Some(n) = bigger.hidden_layers.get(i) {
                     let mut n = n.clone();
                     n.prune_invalid_outputs(hidden_len, O);
 
@@ -455,7 +472,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
                 }
             }
 
-            let mut n = other.hidden_layers[i].clone();
+            let mut n = smaller.hidden_layers[i].clone();
             n.prune_invalid_outputs(hidden_len, O);
 
             hidden_layers[i] = n;

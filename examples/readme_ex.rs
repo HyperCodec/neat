@@ -36,6 +36,7 @@ fn fitness(agent: &MyAgentGenome) -> f32 {
         let expected0: f32 = (inputs[0] >= 0.5 && inputs[1] < 0.5).into();
         let expected1: f32 = (inputs[2] >= 0.5).into();
 
+        // println!("predicting {i}");
         let output = agent.brain.predict(inputs);
 
         fit += inverse_error(expected0, output[0]);
@@ -48,7 +49,7 @@ fn fitness(agent: &MyAgentGenome) -> f32 {
 fn main() {
     let mut sim = GeneticSim::new(
         // create a population of 100 random neural networks
-        Vec::gen_random(100),
+        Vec::gen_random(3),
 
         // provide the fitness function that will
         // test the agents individually so the nextgen
@@ -63,8 +64,8 @@ fn main() {
 
     // fast forward 100 generations. identical to looping 
     // 100 times with `sim.next_generation()`.
-    for _ in 0..100 {
-        println!("a");
+    for i in 0..100 {
+        println!("{i}");
         sim.next_generation();
     }
 }
