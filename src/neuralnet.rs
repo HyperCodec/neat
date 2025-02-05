@@ -276,6 +276,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         loc
     }
 
+    /// Gets a random connection and weight from the neural network.
     pub fn random_connection(&self, rng: &mut impl Rng) -> (Connection, f32) {
         let from = self.random_location(rng);
 
