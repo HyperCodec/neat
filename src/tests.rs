@@ -149,8 +149,6 @@ fn neural_net_cache_sync() {
     for i in 0..2 {
         let input_loc = NeuronLocation::Input(i);
 
-        assert!(cache.claim(&input_loc));
-
         for j in 0..3 {
             cache.add(
                 NeuronLocation::Hidden(j),
@@ -163,7 +161,6 @@ fn neural_net_cache_sync() {
         let hidden_loc = NeuronLocation::Hidden(i);
 
         assert!(cache.is_ready(&hidden_loc));
-        assert!(cache.claim(&hidden_loc));
 
         for j in 0..2 {
             cache.add(

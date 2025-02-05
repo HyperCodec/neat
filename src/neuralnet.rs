@@ -1,7 +1,7 @@
 use std::{
     collections::HashSet,
     sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
 };
@@ -137,17 +137,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
 
-        if !cache.claim(loc) {
-            // some other thread is already
-            // waiting to do this task, currently doing it, or done.
-            // no need to do it again.
+        if !cache.is_ready(loc) {
+            // this neuron's value isn't
+            // at its final form, don't try to evaluate it.
+            // the connection that finishes the neuron
+            // will evaluate it.
             return;
-        }
-
-        while !cache.is_ready(loc) {
-            // essentially spinlocks until the dependency tasks are complete,
-            // while letting this thread do some work on random tasks.
-            rayon::yield_now();
         }
 
         let val = cache.get(loc);
@@ -744,9 +739,6 @@ pub struct NeuronCache {
 
     /// The number of inputs that have finished evaluating.
     pub finished_inputs: AtomicUsize,
-
-    /// Whether or not a thread has claimed this neuron to work on it.
-    pub claimed: AtomicBool,
 }
 
 impl NeuronCache {
@@ -767,7 +759,6 @@ impl From<&Neuron> for NeuronCache {
             value: AtomicF32::new(value.bias),
             expected_inputs: value.input_count,
             finished_inputs: AtomicUsize::new(0),
-            claimed: AtomicBool::new(false),
         }
     }
 }
@@ -797,6 +788,7 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
 
     /// Adds a value to the neuron at the specified location and increments [`finished_inputs`][NeuronCache::finished_inputs].
     pub fn add(&self, loc: impl AsRef<NeuronLocation>, n: f32) -> f32 {
+        // TODO panic or something if there's too many finished_inputs already.
         match loc.as_ref() {
             NeuronLocation::Input(i) => self.input_layer[*i].value.fetch_add(n, Ordering::SeqCst),
             NeuronLocation::Hidden(i) => {
@@ -819,15 +811,15 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         match loc.as_ref() {
             NeuronLocation::Input(i) => {
                 let c = &self.input_layer[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.expected_inputs == c.finished_inputs.load(Ordering::SeqCst)
             }
             NeuronLocation::Hidden(i) => {
                 let c = &self.hidden_layers[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.expected_inputs == c.finished_inputs.load(Ordering::SeqCst)
             }
             NeuronLocation::Output(i) => {
                 let c = &self.output_layer[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.expected_inputs == c.finished_inputs.load(Ordering::SeqCst)
             }
         }
     }
@@ -848,24 +840,6 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
             .collect();
 
         output.try_into().unwrap()
-    }
-
-    /// Attempts to claim a neuron. Returns false if it has already been claimed.
-    pub fn claim(&self, loc: impl AsRef<NeuronLocation>) -> bool {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => self.input_layer[*i]
-                .claimed
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok(),
-            NeuronLocation::Hidden(i) => self.hidden_layers[*i]
-                .claimed
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok(),
-            NeuronLocation::Output(i) => self.output_layer[*i]
-                .claimed
-                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-                .is_ok(),
-        }
     }
 }
 
