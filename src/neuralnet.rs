@@ -280,7 +280,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn random_connection(&self, rng: &mut impl Rng) -> (Connection, f32) {
         let from = self.random_location(rng);
 
-        let n = self.get_neuron(&from);
+        let n = self.get_neuron(from);
         if n.outputs.is_empty() {
             return self.random_connection(rng);
         }
