@@ -42,7 +42,7 @@ pub struct MutationSettings {
 impl Default for MutationSettings {
     fn default() -> Self {
         Self {
-            mutation_rate: 0.01,
+            mutation_rate: 0.05,
             mutation_passes: 3,
             weight_mutation_amount: 0.5,
         }
@@ -237,9 +237,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Mutates a connection's weight.
     pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
-        let rate = self.mutation_settings.weight_mutation_amount;
+        let max = self.mutation_settings.weight_mutation_amount;
         let n = self.get_neuron_mut(connection.from);
-        n.mutate_weight(connection.to, rate, rng).unwrap();
+        n.mutate_weight(connection.to, max, rng).unwrap();
     }
 
     /// Get a random valid location within the network.
@@ -274,6 +274,19 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         loc
+    }
+
+    pub fn random_connection_from_scope(&self, rng: &mut impl Rng, scope: NeuronScope) -> (Connection, f32) {
+        let from = self.random_location(rng);
+
+        let n = self.get_neuron(&from);
+        if !scope.contains(NeuronScope::from(&from)) || n.outputs.is_empty() {
+            return self.random_connection_from_scope(rng, scope);
+        }
+
+        let (to, weight) = n.random_output(rng);
+
+        (Connection { from, to }, weight)
     }
 
     /// Remove a connection and any hanging neurons caused by the deletion.
@@ -371,11 +384,8 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         if rng.gen::<f32>() <= rate {
             // split connection
             println!("split connection");
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let n = self.get_neuron(from);
-            let (to, _) = n.random_output(rng);
-
-            self.split_connection(Connection { from, to }, rng);
+            let (conn, _) = self.random_connection_from_scope(rng, !NeuronScope::OUTPUT);
+            self.split_connection(conn, rng);
         }
 
         if rng.gen::<f32>() <= rate {
@@ -638,7 +648,7 @@ impl Neuron {
     pub fn mutate_weight(
         &mut self,
         output: impl AsRef<NeuronLocation>,
-        rate: f32,
+        max: f32,
         rng: &mut impl Rng,
     ) -> Option<f32> {
         let loc = *output.as_ref();
@@ -647,7 +657,7 @@ impl Neuron {
         while i < self.outputs.len() {
             let o = &mut self.outputs[i];
             if o.0 == loc {
-                o.1 += rng.gen_range(-rate..rate);
+                o.1 += rng.gen_range(-max..max);
 
                 return Some(o.1);
             }
@@ -660,6 +670,11 @@ impl Neuron {
 
     /// Get a random output location and weight.
     pub fn random_output(&self, rng: &mut impl Rng) -> (NeuronLocation, f32) {
+        if self.outputs.is_empty() {
+            // TODO option type
+            panic!("cannot sample outputs from a neuron with no outputs");
+        }
+
         self.outputs[rng.gen_range(0..self.outputs.len())]
     }
 

@@ -27,6 +27,8 @@ fn fitness(agent: &MyAgentGenome) -> f32 {
     let mut rng = rand::thread_rng();
     let mut fit = 0.;
 
+    // dbg!(&agent.brain);
+
     for _ in 0..10 {
         // run the test multiple times for consistency
 
