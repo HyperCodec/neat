@@ -387,7 +387,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             for j in 0..conns {
                 let (loc, _) = self.input_layer[i].outputs[j];
                 self.get_neuron_mut(loc).input_count += 1;
-                
             }
         }
 
