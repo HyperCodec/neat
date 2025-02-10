@@ -70,6 +70,9 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 
     /// The mutation settings for the network.
     pub mutation_settings: MutationSettings,
+
+    /// The total number of connections in the network
+    pub(crate) total_connections: usize,
 }
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
@@ -86,11 +89,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             ));
         }
 
+        let mut total_connections = 0;
         let mut input_layer = Vec::with_capacity(I);
 
         for _ in 0..I {
             let mut already_chosen = Vec::new();
-            let outputs = (0..rng.gen_range(1..=O))
+            let conns = rng.gen_range(1..=O);
+            total_connections += conns;
+
+            let outputs = (0..conns)
                 .map(|_| {
                     let mut j = rng.gen_range(0..O);
                     while already_chosen.contains(&j) {
@@ -119,6 +126,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             hidden_layers: vec![],
             output_layer,
             mutation_settings,
+            total_connections,
         }
     }
 
@@ -362,19 +370,27 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         });
     }
 
-    /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network.
-    pub fn recalculate_input_counts(&mut self) {
+    /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network,
+    /// as well as the [`total_connections`][`NeuralNetwork::total_connections`] field on the NeuralNetwork.
+    pub fn recalculate_connections(&mut self) {
         unsafe { self.clear_input_counts() };
 
+        self.total_connections = 0;
+
         for i in 0..I {
-            for j in 0..self.input_layer[i].outputs.len() {
+            let conns = self.input_layer[i].outputs.len();
+            self.total_connections += conns;
+            for j in 0..conns {
                 let (loc, _) = self.input_layer[i].outputs[j];
                 self.get_neuron_mut(loc).input_count += 1;
+                
             }
         }
 
         for i in 0..self.hidden_layers.len() {
-            for j in 0..self.hidden_layers[i].outputs.len() {
+            let conns = self.hidden_layers[i].outputs.len();
+            self.total_connections += conns;
+            for j in 0..conns {
                 let (loc, _) = self.hidden_layers[i].outputs[j];
                 self.get_neuron_mut(loc).input_count += 1;
             }
@@ -384,8 +400,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
-        // TODO maybe cache this value between gens (especially bc there's multiple mutation passes)
-        let total_connections = AtomicUsize::new(0);
         self.map_weights(|w| {
             // TODO maybe `Send`able rng.
             let mut rng = rand::thread_rng();
@@ -393,19 +407,16 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             if rng.gen::<f32>() <= rate {
                 *w += rng.gen_range(-rate..rate);
             }
-            total_connections.fetch_add(1, Ordering::SeqCst);
         });
 
-        let mut total_connections = total_connections.into_inner();
-
-        if rng.gen::<f32>() <= rate && total_connections > 0 {
+        if rng.gen::<f32>() <= rate && self.total_connections > 0 {
             // split connection
             let (conn, _) = self.random_connection(rng);
             self.split_connection(conn, rng);
-            total_connections += 1;
+            self.total_connections += 1;
         }
 
-        if rng.gen::<f32>() <= rate || total_connections == 0 {
+        if rng.gen::<f32>() <= rate || self.total_connections == 0 {
             // add connection
             let weight = rng.gen::<f32>();
 
@@ -418,10 +429,10 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
                 connection = Connection { from, to };
             }
-            total_connections += 1;
+            self.total_connections += 1;
         }
 
-        if rng.gen::<f32>() <= rate && total_connections > 0 {
+        if rng.gen::<f32>() <= rate && self.total_connections > 0 {
             // remove connection
 
             // providing a scope
@@ -429,7 +440,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 
             self.remove_connection(conn);
 
-            // total_connections -= 1;
+            self.total_connections -= 1;
         }
     }
 }
@@ -520,11 +531,12 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
             hidden_layers,
             output_layer,
             mutation_settings,
+            total_connections: 0,
         };
 
         // TODO maybe find a way to do this while doing crossover stuff instead of recalculating everything.
         // would be annoying to implement though.
-        child.recalculate_input_counts();
+        child.recalculate_connections();
 
         for _ in 0..child.mutation_settings.mutation_passes {
             child.mutate(child.mutation_settings.mutation_rate, rng);
