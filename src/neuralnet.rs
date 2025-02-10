@@ -248,7 +248,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return match rng.gen_range(0..2) {
                 0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
                 1 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
-                _ => unreachable!()
+                _ => unreachable!(),
             };
         }
 
@@ -343,21 +343,23 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     unsafe fn clear_input_counts(&mut self) {
         // not sure whether all this parallelism is necessary or if it will just generate overhead
-        // rayon::scope(|s| {
-        //     s.spawn(|_| self.input_layer.par_iter_mut().for_each(|n| n.input_count = 0));
-        //     s.spawn(|_| self.hidden_layers.par_iter_mut().for_each(|n| n.input_count = 0));
-        //     s.spawn(|_| self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0));
-        // });
-
-        self.input_layer
-            .par_iter_mut()
-            .for_each(|n| n.input_count = 0);
-        self.hidden_layers
-            .par_iter_mut()
-            .for_each(|n| n.input_count = 0);
-        self.output_layer
-            .par_iter_mut()
-            .for_each(|n| n.input_count = 0);
+        rayon::scope(|s| {
+            s.spawn(|_| {
+                self.input_layer
+                    .par_iter_mut()
+                    .for_each(|n| n.input_count = 0)
+            });
+            s.spawn(|_| {
+                self.hidden_layers
+                    .par_iter_mut()
+                    .for_each(|n| n.input_count = 0)
+            });
+            s.spawn(|_| {
+                self.output_layer
+                    .par_iter_mut()
+                    .for_each(|n| n.input_count = 0)
+            });
+        });
     }
 
     /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network.
@@ -382,16 +384,29 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
-        if rng.gen::<f32>() <= rate {
+        // TODO maybe cache this value between gens (especially bc there's multiple mutation passes)
+        let total_connections = AtomicUsize::new(0);
+        self.map_weights(|w| {
+            // TODO maybe `Send`able rng.
+            let mut rng = rand::thread_rng();
+
+            if rng.gen::<f32>() <= rate {
+                *w += rng.gen_range(-rate..rate);
+            }
+            total_connections.fetch_add(1, Ordering::SeqCst);
+        });
+
+        let mut total_connections = total_connections.into_inner();
+
+        if rng.gen::<f32>() <= rate && total_connections > 0 {
             // split connection
-            println!("split connection");
             let (conn, _) = self.random_connection(rng);
             self.split_connection(conn, rng);
+            total_connections += 1;
         }
 
-        if rng.gen::<f32>() <= rate {
+        if rng.gen::<f32>() <= rate || total_connections == 0 {
             // add connection
-            println!("added connection");
             let weight = rng.gen::<f32>();
 
             let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
@@ -403,27 +418,19 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
                 connection = Connection { from, to };
             }
+            total_connections += 1;
         }
 
-        if rng.gen::<f32>() <= rate {
+        if rng.gen::<f32>() <= rate && total_connections > 0 {
             // remove connection
-            println!("removed connection");
 
-            // providing a scope 
+            // providing a scope
             let (conn, _) = self.random_connection(rng);
 
             self.remove_connection(conn);
+
+            // total_connections -= 1;
         }
-
-        self.map_weights(|w| {
-            // TODO maybe `Send`able rng.
-            let mut rng = rand::thread_rng();
-
-            if rng.gen::<f32>() <= rate {
-                println!("mutated weight");
-                *w += rng.gen_range(-rate..rate);
-            }
-        });
     }
 }
 
@@ -471,7 +478,11 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
             if rng.gen::<f32>() >= 0.5 {
                 if let Some(n) = smaller.hidden_layers.get(i) {
                     let mut n = n.clone();
+
+                    // TODO merge these two functions so that it isn't
+                    // doing extra work by looping twice.
                     n.prune_invalid_outputs(hidden_len, O);
+                    n.prune_duplicate_outputs();
 
                     hidden_layers.push(n);
 
@@ -479,8 +490,11 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
                 }
             }
 
+            // either `bigger` won the 50/50 or `i >= smaller.hidden_layers.len()`
+
             let mut n = bigger.hidden_layers[i].clone();
             n.prune_invalid_outputs(hidden_len, O);
+            n.prune_duplicate_outputs();
 
             hidden_layers.push(n);
         }
@@ -581,7 +595,7 @@ impl Neuron {
     ) -> Self {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
         let activations = reg.activations_in_scope(current_scope);
-        
+
         // dbg!(current_scope, &activations);
 
         Self::new_with_activations(outputs, activations, rng)
@@ -695,6 +709,32 @@ impl Neuron {
     pub fn prune_invalid_outputs(&mut self, hidden_len: usize, output_len: usize) {
         self.outputs
             .retain(|(loc, _)| output_exists(*loc, hidden_len, output_len));
+    }
+
+    /// Removes any connections pointing to the same neuron.
+    /// Retains the first connection.
+    pub(crate) fn prune_duplicate_outputs(&mut self) {
+        // TODO optimize so it isn't O(N^2)
+
+        // outer loop probably doesn't need to be a while
+        // but i don't think range iterators update when len
+        // changes.
+        let mut i = 0;
+        while i < self.outputs.len() {
+            let a = self.outputs[i].0;
+
+            let mut j = 0;
+            while j < self.outputs.len() {
+                let b = self.outputs[j].0;
+                if a == b {
+                    self.outputs.remove(j);
+                    continue;
+                }
+                j += 1;
+            }
+
+            i += 1;
+        }
     }
 }
 
