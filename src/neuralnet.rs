@@ -285,7 +285,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Gets a random connection and weight from the neural network.
-    pub fn random_connection(&self, rng: &mut impl Rng) -> (Connection, f32) {
+    pub fn random_connection(&self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
+        if self.total_connections == 0 {
+            return None;
+        }
+
         let from = self.random_location(rng);
 
         let n = self.get_neuron(from);
@@ -295,7 +299,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let (to, weight) = n.random_output(rng);
 
-        (Connection { from, to }, weight)
+        Some((Connection { from, to }, weight))
     }
 
     /// Remove a connection and any hanging neurons caused by the deletion.
@@ -411,7 +415,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
             // split connection
-            let (conn, _) = self.random_connection(rng);
+            let (conn, _) = self.random_connection(rng).unwrap();
             self.split_connection(conn, rng);
             self.total_connections += 1;
         }
@@ -436,7 +440,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             // remove connection
 
             // providing a scope
-            let (conn, _) = self.random_connection(rng);
+            let (conn, _) = self.random_connection(rng).unwrap();
 
             self.remove_connection(conn);
 
