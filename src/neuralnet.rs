@@ -310,7 +310,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns whether there was a hanging neuron.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         if self.get_neuron(connection.to).input_count == 0 {
-            println!("errorneous network: {self:#?}");
+            println!("erroneous network: {self:#?}");
         }
 
         let a = self.get_neuron_mut(connection.from);
