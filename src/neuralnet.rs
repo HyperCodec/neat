@@ -192,9 +192,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let mut n = Neuron::new(vec![(connection.to, weight)], NeuronScope::HIDDEN, rng);
         n.input_count += 1;
         self.hidden_layers.push(n);
+
+        self.total_connections += 1;
     }
 
-    /// Adds a connection but does not check for cyclic linkages.
+    /// Adds a connection but does not check for cyclic linkages or update [`total_connections`][NeuralNetwork::total_connections].
     ///
     /// # Safety
     /// This is marked as unsafe because it could cause a hang/livelock when predicting due to cyclic linkage.
@@ -239,6 +241,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         unsafe {
             self.add_connection_raw(connection, weight);
         }
+
+        self.total_connections += 1;
 
         true
     }
@@ -311,6 +315,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let a = self.get_neuron_mut(connection.from);
         unsafe { a.remove_connection(connection.to) }.unwrap();
+        self.total_connections -= 1;
 
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
@@ -436,7 +441,6 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             // split connection
             let (conn, _) = self.random_connection(rng).unwrap();
             self.split_connection(conn, rng);
-            self.total_connections += 1;
         }
 
         if rng.gen::<f32>() <= rate || self.total_connections == 0 {
@@ -452,7 +456,6 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
                 connection = Connection { from, to };
             }
-            self.total_connections += 1;
         }
 
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
@@ -462,8 +465,6 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             let (conn, _) = self.random_connection(rng).unwrap();
 
             self.remove_connection(conn);
-
-            self.total_connections -= 1;
         }
     }
 }
