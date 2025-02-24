@@ -305,12 +305,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Remove a connection and any hanging neurons caused by the deletion.
     /// Returns whether there was a hanging neuron.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
-        let a = self.get_neuron_mut(connection.from);
-        unsafe { a.remove_connection(connection.to) }.unwrap();
-
         if self.get_neuron(connection.to).input_count == 0 {
             println!("errorneous network: {self:#?}");
         }
+
+        let a = self.get_neuron_mut(connection.from);
+        unsafe { a.remove_connection(connection.to) }.unwrap();
 
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
@@ -406,23 +406,17 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         // delete hanging neurons
-        let mut deletions = Vec::new();
-
         let mut i = 0;
         while i < self.hidden_layers.len() {
             let neuron = self.get_neuron(NeuronLocation::Hidden(i));
 
             if neuron.input_count == 0 {
                 self.hidden_layers.remove(i);
-                deletions.push(i);
+                unsafe { self.downshift_connections(i) };
                 continue;
             }
 
             i += 1;
-        }
-
-        for i in deletions {
-            unsafe { self.downshift_connections(i) };
         }
     }
 }
