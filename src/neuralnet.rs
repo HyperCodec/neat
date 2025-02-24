@@ -308,6 +308,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let a = self.get_neuron_mut(connection.from);
         unsafe { a.remove_connection(connection.to) }.unwrap();
 
+        if self.get_neuron(connection.to).input_count == 0 {
+            println!("errorneous network: {self:#?}");
+        }
+
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
 
@@ -376,7 +380,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network,
     /// as well as the [`total_connections`][`NeuralNetwork::total_connections`] field on the NeuralNetwork.
+    /// Deletes any neurons with an [`input_count`][`Neuron::input_count`] of 0.
     pub fn recalculate_connections(&mut self) {
+        // TODO optimization/parallelization.
         unsafe { self.clear_input_counts() };
 
         self.total_connections = 0;
@@ -397,6 +403,26 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 let (loc, _) = self.hidden_layers[i].outputs[j];
                 self.get_neuron_mut(loc).input_count += 1;
             }
+        }
+
+        // delete hanging neurons
+        let mut deletions = Vec::new();
+
+        let mut i = 0;
+        while i < self.hidden_layers.len() {
+            let neuron = self.get_neuron(NeuronLocation::Hidden(i));
+
+            if neuron.input_count == 0 {
+                self.hidden_layers.remove(i);
+                deletions.push(i);
+                continue;
+            }
+
+            i += 1;
+        }
+
+        for i in deletions {
+            unsafe { self.downshift_connections(i) };
         }
     }
 }
