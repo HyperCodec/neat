@@ -206,4 +206,33 @@ fn remove_neuron() {
     assert_eq!(got, expected);
 }
 
+#[test]
+fn recalculate_connections() {
+    let mut rng = rand::thread_rng();
+
+    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
+    
+    let hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+
+    let output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
+
+    let mut network = NeuralNetwork {
+        input_layer: [input],
+        hidden_layers: vec![hidden; 3],
+        output_layer: [output],
+        mutation_settings: MutationSettings::default(),
+        total_connections: 0,
+    };
+
+    network.recalculate_connections();
+
+    assert_eq!(network.total_connections, 6);
+
+    for n in &network.hidden_layers {
+        assert_eq!(n.input_count, 1);
+    }
+
+    assert_eq!(network.output_layer[0].input_count, 3);
+}
+
 // TODO test every method
