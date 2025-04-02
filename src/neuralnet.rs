@@ -545,7 +545,6 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
     }
 }
 
-#[allow(clippy::needless_range_loop)]
 impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, O> {
     fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
         let mut output_layer = self.output_layer.clone();
