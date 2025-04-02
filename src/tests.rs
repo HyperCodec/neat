@@ -235,4 +235,86 @@ fn recalculate_connections() {
     assert_eq!(network.output_layer[0].input_count, 3);
 }
 
+#[test]
+fn add_connection() {
+    let mut rng = rand::thread_rng();
+
+    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
+    
+    let mut hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+    hidden.input_count = 1;
+
+    let mut output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
+    output.input_count = 3;
+
+    let mut network = NeuralNetwork {
+        input_layer: [input],
+        hidden_layers: vec![hidden; 3],
+        output_layer: [output],
+        mutation_settings: MutationSettings::default(),
+        total_connections: 6,
+    };
+
+    assert!(network.add_connection(Connection {
+        from: NeuronLocation::Hidden(0),
+        to: NeuronLocation::Hidden(1),
+    }, 1.));
+
+    assert_eq!(network.total_connections, 7);
+    assert_eq!(network.hidden_layers[1].input_count, 2);
+
+    assert!(!network.add_connection(Connection {
+        from: NeuronLocation::Hidden(1),
+        to: NeuronLocation::Hidden(0)
+    }, 1.));
+
+    assert_eq!(network.total_connections, 7);
+
+    assert!(network.add_connection(Connection {
+        from: NeuronLocation::Hidden(1),
+        to: NeuronLocation::Hidden(2),
+    }, 1.));
+
+    assert!(!network.add_connection(Connection {
+        from: NeuronLocation::Hidden(2),
+        to: NeuronLocation::Hidden(0),
+    }, 1.));
+}
+
+#[test]
+fn remove_connection() {
+    let mut rng = rand::thread_rng();
+
+    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
+    
+    let mut hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+    hidden.input_count = 1;
+
+    let mut output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
+    output.input_count = 3;
+
+    let mut network = NeuralNetwork {
+        input_layer: [input],
+        hidden_layers: vec![hidden; 3],
+        output_layer: [output],
+        mutation_settings: MutationSettings::default(),
+        total_connections: 6,
+    };
+
+    assert!(!network.remove_connection(Connection {
+        from: NeuronLocation::Hidden(0),
+        to: NeuronLocation::Output(0),
+    }));
+
+    assert_eq!(network.total_connections, 5);
+
+    assert!(network.remove_connection(Connection {
+        from: NeuronLocation::Input(0),
+        to: NeuronLocation::Hidden(1),
+    }));
+
+    assert_eq!(network.total_connections, 3);
+    assert_eq!(network.hidden_layers.len(), 2);
+}
+
 // TODO test every method
