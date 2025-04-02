@@ -493,13 +493,25 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         None
     }
 
-    /// Removes a random connnection from the network and returns it.
-    pub fn remove_random_connection(&mut self, rng: &mut impl Rng) -> (Connection, f32) {
-        let output = self.random_connection(rng).unwrap();
+    /// Removes a random connnection from the network and returns it, if there are any.
+    pub fn remove_random_connection(&mut self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
+        if let Some(output) = self.random_connection(rng) {
+            self.remove_connection(output.0);
 
-        self.remove_connection(output.0);
+            return Some(output);
+        }
 
-        output
+        None
+    }
+
+    /// Splits a random connection in the network, if there are any.
+    pub fn split_random_connection(&mut self, rng: &mut impl Rng) -> bool {
+        if let Some((conn, _)) = self.random_connection(rng) {
+            self.split_connection(conn, rng);
+            return true;
+        }
+
+        false
     }
 }
 
@@ -508,9 +520,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         self.mutate_weights(rate);
 
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
-            // split connection
-            let (conn, _) = self.random_connection(rng).unwrap();
-            self.split_connection(conn, rng);
+            self.split_random_connection(rng);
         }
 
         if rng.gen::<f32>() <= rate || self.total_connections == 0 {
