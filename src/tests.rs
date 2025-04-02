@@ -350,4 +350,21 @@ fn random_location_in_scope() {
         .is_none());
 }
 
+#[test]
+fn split_connection() {
+    let mut rng = rand::thread_rng();
+    let mut network = small_test_network();
+
+    network.split_connection(Connection {
+        from: NeuronLocation::Input(0),
+        to: NeuronLocation::Hidden(1),
+    }, &mut rng);
+
+    assert_eq!(network.total_connections, 7);
+
+    let n = &network.hidden_layers[3];
+    assert_eq!(n.outputs[0].0, NeuronLocation::Hidden(1));
+    assert_eq!(n.input_count, 1);
+}
+
 // TODO test every method
