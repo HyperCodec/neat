@@ -454,10 +454,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             i += 1;
         }
     }
-}
 
-impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
-    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
+    /// Randomly mutates all weights in the network 
+    /// in parallel using [`ThreadRng`][rand::prelude::ThreadRng].
+    pub fn mutate_weights(&mut self, rate: f32) {
         self.map_weights(|w| {
             // TODO maybe `Send`able rng.
             let mut rng = rand::thread_rng();
@@ -466,6 +466,46 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 *w += rng.gen_range(-rate..rate);
             }
         });
+    }
+
+    /// Creates a random valid connection, if one can be made.
+    pub fn add_random_connection(&mut self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
+        let weight = rng.gen::<f32>();
+
+        // TODO make this not look nested and gross
+        if let Some(from) = self.random_location_in_scope(rng, !NeuronScope::OUTPUT) {
+            if let Some(to) = self.random_location_in_scope(rng, !NeuronScope::INPUT) {
+                let mut connection = Connection { from, to };
+                while !self.add_connection(connection, weight) {
+                    let from = self
+                        .random_location_in_scope(rng, !NeuronScope::OUTPUT)
+                        .unwrap();
+                    let to = self
+                        .random_location_in_scope(rng, !NeuronScope::INPUT)
+                        .unwrap();
+                    connection = Connection { from, to };
+                }
+
+                return Some((connection, weight));
+            }
+        }
+
+        None
+    }
+
+    /// Removes a random connnection from the network and returns it.
+    pub fn remove_random_connection(&mut self, rng: &mut impl Rng) -> (Connection, f32) {
+        let output = self.random_connection(rng).unwrap();
+
+        self.remove_connection(output.0);
+
+        output
+    }
+}
+
+impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
+    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
+        self.mutate_weights(rate);
 
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
             // split connection
@@ -474,32 +514,11 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         }
 
         if rng.gen::<f32>() <= rate || self.total_connections == 0 {
-            // add connection
-            let weight = rng.gen::<f32>();
-
-            // TODO make this not look nested and gross
-            if let Some(from) = self.random_location_in_scope(rng, !NeuronScope::OUTPUT) {
-                if let Some(to) = self.random_location_in_scope(rng, !NeuronScope::INPUT) {
-                    let mut connection = Connection { from, to };
-                    while !self.add_connection(connection, weight) {
-                        let from = self
-                            .random_location_in_scope(rng, !NeuronScope::OUTPUT)
-                            .unwrap();
-                        let to = self
-                            .random_location_in_scope(rng, !NeuronScope::INPUT)
-                            .unwrap();
-                        connection = Connection { from, to };
-                    }
-                }
-            }
+            self.add_random_connection(rng);
         }
 
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
-            // remove connection
-
-            let (conn, _) = self.random_connection(rng).unwrap();
-
-            self.remove_connection(conn);
+            self.remove_random_connection(rng);
         }
     }
 }
