@@ -355,10 +355,13 @@ fn split_connection() {
     let mut rng = rand::thread_rng();
     let mut network = small_test_network();
 
-    network.split_connection(Connection {
-        from: NeuronLocation::Input(0),
-        to: NeuronLocation::Hidden(1),
-    }, &mut rng);
+    network.split_connection(
+        Connection {
+            from: NeuronLocation::Input(0),
+            to: NeuronLocation::Hidden(1),
+        },
+        &mut rng,
+    );
 
     assert_eq!(network.total_connections, 7);
 

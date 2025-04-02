@@ -455,7 +455,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    /// Randomly mutates all weights in the network 
+    /// Randomly mutates all weights in the network
     /// in parallel using [`ThreadRng`][rand::prelude::ThreadRng].
     pub fn mutate_weights(&mut self, rate: f32) {
         self.map_weights(|w| {
