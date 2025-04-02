@@ -1,4 +1,4 @@
-use crate::*;
+use crate::{activation::NeuronScope, *};
 use rand::prelude::*;
 
 // no support for tuple structs derive in genetic-rs yet :(
@@ -172,3 +172,38 @@ fn neural_net_cache_sync() {
 
     assert_eq!(cache.output(), [2.0688455, 2.0688455]);
 }
+
+#[test]
+fn remove_neuron() {
+    let mut rng = rand::thread_rng();
+
+    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
+    
+    let mut hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+    hidden.input_count = 1;
+
+    let mut output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
+    output.input_count = 3;
+
+    let mut network = NeuralNetwork {
+        input_layer: [input],
+        hidden_layers: vec![hidden; 3],
+        output_layer: [output],
+        mutation_settings: MutationSettings::default(),
+        total_connections: 6,
+    };
+
+    network.remove_neuron(NeuronLocation::Hidden(1));
+
+    assert_eq!(network.total_connections, 4);
+
+    let expected = vec![NeuronLocation::Hidden(0), NeuronLocation::Hidden(1)];
+    let got: Vec<_> = network.input_layer[0].outputs
+        .iter()
+        .map(|c| c.0)
+        .collect();
+
+    assert_eq!(got, expected);
+}
+
+// TODO test every method

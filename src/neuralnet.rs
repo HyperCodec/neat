@@ -307,20 +307,29 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Remove a connection and any hanging neurons caused by the deletion.
-    /// Returns whether there was a hanging neuron.
+    /// Returns whether a hanging neuron (i.e. a neuron with no inputs) was removed.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         if self.get_neuron(connection.to).input_count == 0 {
             println!("erroneous network: {self:#?}");
+            self.recalculate_connections();
+            println!("after recalculating: {self:#?}");
         }
 
         let a = self.get_neuron_mut(connection.from);
         unsafe { a.remove_connection(connection.to) }.unwrap();
+        
+        // if connection.from.is_hidden() && a.outputs.len() == 0 {
+        //     // removes neurons with no outputs
+        //     // TODO return whether this was remove
+        //     self.remove_neuron(connection.from);
+        // }
+        
         self.total_connections -= 1;
 
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
 
-        if b.input_count == 0 && !connection.to.is_output() {
+        if b.input_count == 0 && connection.to.is_hidden() {
             self.remove_neuron(connection.to);
             return true;
         }
@@ -331,23 +340,36 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Remove a neuron and downshift all connection indexes to compensate for it.
     pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
         let loc = loc.as_ref();
-        if !loc.is_hidden() {
-            panic!("Can only remove neurons from hidden layer");
-        }
 
-        unsafe {
-            self.downshift_connections(loc.unwrap());
+        if let NeuronLocation::Hidden(i) = loc {
+            let n = self.hidden_layers.remove(*i);
+
+            self.total_connections -= n.outputs.len();
+
+            for (output, _) in n.outputs {
+                let n2 = self.get_neuron_mut(output);
+                n2.input_count -= 1;
+            }
+
+            unsafe {
+                self.downshift_connections(loc.unwrap());
+            }
+        } else {
+            panic!("Can only remove neurons from hidden layer");
         }
     }
 
     unsafe fn downshift_connections(&mut self, i: usize) {
+        let removed_connections = AtomicUsize::new(0);
         self.input_layer
             .par_iter_mut()
-            .for_each(|n| n.downshift_outputs(i));
+            .for_each(|n| { removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst); });
 
         self.hidden_layers
             .par_iter_mut()
-            .for_each(|n| n.downshift_outputs(i));
+            .for_each(|n| { removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst); });
+    
+        self.total_connections -= removed_connections.into_inner();
     }
 
     // TODO maybe more parallelism and pass Connection info.
@@ -385,7 +407,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network,
     /// as well as the [`total_connections`][`NeuralNetwork::total_connections`] field on the NeuralNetwork.
-    /// Deletes any neurons with an [`input_count`][`Neuron::input_count`] of 0.
+    /// Deletes any hidden layer neurons with an [`input_count`][`Neuron::input_count`] of 0.
     pub fn recalculate_connections(&mut self) {
         // TODO optimization/parallelization.
         unsafe { self.clear_input_counts() };
@@ -461,7 +483,6 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         if rng.gen::<f32>() <= rate && self.total_connections > 0 {
             // remove connection
 
-            // providing a scope
             let (conn, _) = self.random_connection(rng).unwrap();
 
             self.remove_connection(conn);
@@ -729,16 +750,20 @@ impl Neuron {
         self.outputs[rng.gen_range(0..self.outputs.len())]
     }
 
-    pub(crate) fn downshift_outputs(&mut self, i: usize) {
-        // TODO par_iter_mut instead of replace
+    pub(crate) fn handle_removed(&mut self, i: usize) -> usize {
+        // TODO par_iter_mut or something instead of replace
+        let removed = AtomicUsize::new(0);
         replace_with_or_abort(&mut self.outputs, |o| {
             o.into_par_iter()
-                .map(|(loc, w)| match loc {
-                    NeuronLocation::Hidden(j) if j > i => (NeuronLocation::Hidden(j - 1), w),
-                    _ => (loc, w),
+                .filter_map(|(loc, w)| match loc {
+                    NeuronLocation::Hidden(j) if j == i => { removed.fetch_add(1, Ordering::SeqCst); None },
+                    NeuronLocation::Hidden(j) if j > i => Some((NeuronLocation::Hidden(j - 1), w)),
+                    _ => Some((loc, w)),
                 })
                 .collect()
         });
+
+        removed.into_inner()
     }
 
     /// Removes any outputs pointing to a nonexistent neuron.

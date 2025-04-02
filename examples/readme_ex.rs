@@ -2,7 +2,7 @@ use neat::*;
 use rand::prelude::*;
 
 // derive some traits so that we can use this agent with `genetic-rs`.
-#[derive(Debug, Clone, PartialEq, CrossoverReproduction, RandomlyMutable)]
+#[derive(Debug, Clone, PartialEq, CrossoverReproduction, DivisionReproduction, RandomlyMutable)]
 struct MyAgentGenome {
     brain: NeuralNetwork<3, 2>,
 }
@@ -49,7 +49,7 @@ fn fitness(agent: &MyAgentGenome) -> f32 {
 fn main() {
     let mut sim = GeneticSim::new(
         // create a population of 100 random neural networks
-        Vec::gen_random(100),
+        Vec::gen_random(2),
         // provide the fitness function that will
         // test the agents individually so the nextgen
         // function can eliminate the weaker ones.
@@ -57,12 +57,12 @@ fn main() {
         // this nextgen function will kill/drop agents
         // that don't have a high enough fitness, and repopulate
         // by performing crossover reproduction between the remaining ones
-        crossover_pruning_nextgen,
+        division_pruning_nextgen,
     );
 
     // fast forward 100 generations. identical to looping
     // 100 times with `sim.next_generation()`.
-    for i in 0..100 {
+    for i in 0..100000 {
         println!("{i}");
         sim.next_generation();
     }
