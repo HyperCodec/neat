@@ -282,13 +282,17 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         match components[rng.gen_range(0..components.len())] {
             NeuronScope::INPUT => Some(NeuronLocation::Input(rng.gen_range(0..I))),
-            NeuronScope::HIDDEN => if self.hidden_layers.is_empty() {
-                None
-            } else {
-                Some(NeuronLocation::Hidden(rng.gen_range(0..self.hidden_layers.len())))
-            },
+            NeuronScope::HIDDEN => {
+                if self.hidden_layers.is_empty() {
+                    None
+                } else {
+                    Some(NeuronLocation::Hidden(
+                        rng.gen_range(0..self.hidden_layers.len()),
+                    ))
+                }
+            }
             NeuronScope::OUTPUT => Some(NeuronLocation::Output(rng.gen_range(0..O))),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
@@ -321,13 +325,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         let a = self.get_neuron_mut(connection.from);
         unsafe { a.remove_connection(connection.to) }.unwrap();
-        
+
         // if connection.from.is_hidden() && a.outputs.len() == 0 {
         //     // removes neurons with no outputs
         //     // TODO return whether this was remove
         //     self.remove_neuron(connection.from);
         // }
-        
+
         self.total_connections -= 1;
 
         let b = self.get_neuron_mut(connection.to);
@@ -365,14 +369,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     unsafe fn downshift_connections(&mut self, i: usize) {
         let removed_connections = AtomicUsize::new(0);
-        self.input_layer
-            .par_iter_mut()
-            .for_each(|n| { removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst); });
+        self.input_layer.par_iter_mut().for_each(|n| {
+            removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst);
+        });
 
-        self.hidden_layers
-            .par_iter_mut()
-            .for_each(|n| { removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst); });
-    
+        self.hidden_layers.par_iter_mut().for_each(|n| {
+            removed_connections.fetch_add(n.handle_removed(i), Ordering::SeqCst);
+        });
+
         self.total_connections -= removed_connections.into_inner();
     }
 
@@ -478,8 +482,12 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
                 if let Some(to) = self.random_location_in_scope(rng, !NeuronScope::INPUT) {
                     let mut connection = Connection { from, to };
                     while !self.add_connection(connection, weight) {
-                        let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT).unwrap();
-                        let to = self.random_location_in_scope(rng, !NeuronScope::INPUT).unwrap();
+                        let from = self
+                            .random_location_in_scope(rng, !NeuronScope::OUTPUT)
+                            .unwrap();
+                        let to = self
+                            .random_location_in_scope(rng, !NeuronScope::INPUT)
+                            .unwrap();
                         connection = Connection { from, to };
                     }
                 }
@@ -762,7 +770,10 @@ impl Neuron {
         replace_with_or_abort(&mut self.outputs, |o| {
             o.into_par_iter()
                 .filter_map(|(loc, w)| match loc {
-                    NeuronLocation::Hidden(j) if j == i => { removed.fetch_add(1, Ordering::SeqCst); None },
+                    NeuronLocation::Hidden(j) if j == i => {
+                        removed.fetch_add(1, Ordering::SeqCst);
+                        None
+                    }
                     NeuronLocation::Hidden(j) if j > i => Some((NeuronLocation::Hidden(j - 1), w)),
                     _ => Some((loc, w)),
                 })

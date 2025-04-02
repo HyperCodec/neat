@@ -176,9 +176,21 @@ fn neural_net_cache_sync() {
 fn small_test_network() -> NeuralNetwork<1, 1> {
     let mut rng = rand::thread_rng();
 
-    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
-    
-    let mut hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+    let input = Neuron::new(
+        vec![
+            (NeuronLocation::Hidden(0), 1.),
+            (NeuronLocation::Hidden(1), 1.),
+            (NeuronLocation::Hidden(2), 1.),
+        ],
+        NeuronScope::INPUT,
+        &mut rng,
+    );
+
+    let mut hidden = Neuron::new(
+        vec![(NeuronLocation::Output(0), 1.)],
+        NeuronScope::HIDDEN,
+        &mut rng,
+    );
     hidden.input_count = 1;
 
     let mut output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
@@ -195,17 +207,14 @@ fn small_test_network() -> NeuralNetwork<1, 1> {
 
 #[test]
 fn remove_neuron() {
-    let mut network = small_test_network();    
+    let mut network = small_test_network();
 
     network.remove_neuron(NeuronLocation::Hidden(1));
 
     assert_eq!(network.total_connections, 4);
 
     let expected = vec![NeuronLocation::Hidden(0), NeuronLocation::Hidden(1)];
-    let got: Vec<_> = network.input_layer[0].outputs
-        .iter()
-        .map(|c| c.0)
-        .collect();
+    let got: Vec<_> = network.input_layer[0].outputs.iter().map(|c| c.0).collect();
 
     assert_eq!(got, expected);
 }
@@ -214,9 +223,21 @@ fn remove_neuron() {
 fn recalculate_connections() {
     let mut rng = rand::thread_rng();
 
-    let input = Neuron::new(vec![(NeuronLocation::Hidden(0), 1.), (NeuronLocation::Hidden(1), 1.), (NeuronLocation::Hidden(2), 1.)], NeuronScope::INPUT, &mut rng);
-    
-    let hidden = Neuron::new(vec![(NeuronLocation::Output(0), 1.)], NeuronScope::HIDDEN, &mut rng);
+    let input = Neuron::new(
+        vec![
+            (NeuronLocation::Hidden(0), 1.),
+            (NeuronLocation::Hidden(1), 1.),
+            (NeuronLocation::Hidden(2), 1.),
+        ],
+        NeuronScope::INPUT,
+        &mut rng,
+    );
+
+    let hidden = Neuron::new(
+        vec![(NeuronLocation::Output(0), 1.)],
+        NeuronScope::HIDDEN,
+        &mut rng,
+    );
 
     let output = Neuron::new(vec![], NeuronScope::OUTPUT, &mut rng);
 
@@ -243,30 +264,42 @@ fn recalculate_connections() {
 fn add_connection() {
     let mut network = small_test_network();
 
-    assert!(network.add_connection(Connection {
-        from: NeuronLocation::Hidden(0),
-        to: NeuronLocation::Hidden(1),
-    }, 1.));
+    assert!(network.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(0),
+            to: NeuronLocation::Hidden(1),
+        },
+        1.
+    ));
 
     assert_eq!(network.total_connections, 7);
     assert_eq!(network.hidden_layers[1].input_count, 2);
 
-    assert!(!network.add_connection(Connection {
-        from: NeuronLocation::Hidden(1),
-        to: NeuronLocation::Hidden(0)
-    }, 1.));
+    assert!(!network.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(1),
+            to: NeuronLocation::Hidden(0)
+        },
+        1.
+    ));
 
     assert_eq!(network.total_connections, 7);
 
-    assert!(network.add_connection(Connection {
-        from: NeuronLocation::Hidden(1),
-        to: NeuronLocation::Hidden(2),
-    }, 1.));
+    assert!(network.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(1),
+            to: NeuronLocation::Hidden(2),
+        },
+        1.
+    ));
 
-    assert!(!network.add_connection(Connection {
-        from: NeuronLocation::Hidden(2),
-        to: NeuronLocation::Hidden(0),
-    }, 1.));
+    assert!(!network.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(2),
+            to: NeuronLocation::Hidden(0),
+        },
+        1.
+    ));
 }
 
 #[test]
@@ -294,16 +327,27 @@ fn random_location_in_scope() {
     let mut rng = rand::thread_rng();
     let mut network = small_test_network();
 
-    assert_eq!(network.random_location_in_scope(&mut rng, NeuronScope::INPUT), Some(NeuronLocation::Input(0)));
-    
+    assert_eq!(
+        network.random_location_in_scope(&mut rng, NeuronScope::INPUT),
+        Some(NeuronLocation::Input(0))
+    );
+
     // TODO `assert_matches` when it is stable
-    assert!(matches!(network.random_location_in_scope(&mut rng, NeuronScope::HIDDEN), Some(NeuronLocation::Hidden(_))));
+    assert!(matches!(
+        network.random_location_in_scope(&mut rng, NeuronScope::HIDDEN),
+        Some(NeuronLocation::Hidden(_))
+    ));
 
     let multi = network.random_location_in_scope(&mut rng, !NeuronScope::INPUT);
-    assert!(matches!(multi, Some(NeuronLocation::Hidden(_))) || matches!(multi, Some(NeuronLocation::Output(_))));
+    assert!(
+        matches!(multi, Some(NeuronLocation::Hidden(_)))
+            || matches!(multi, Some(NeuronLocation::Output(_)))
+    );
 
     network.hidden_layers = vec![];
-    assert!(network.random_location_in_scope(&mut rng, NeuronScope::HIDDEN).is_none());
+    assert!(network
+        .random_location_in_scope(&mut rng, NeuronScope::HIDDEN)
+        .is_none());
 }
 
 // TODO test every method
