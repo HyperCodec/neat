@@ -277,15 +277,19 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         &self,
         rng: &mut impl Rng,
         scope: NeuronScope,
-    ) -> NeuronLocation {
-        let loc = self.random_location(rng);
+    ) -> Option<NeuronLocation> {
+        let components: Vec<_> = scope.iter().collect();
 
-        // this is a lazy and slow way of donig it, TODO better version.
-        if !scope.contains(NeuronScope::from(loc)) {
-            return self.random_location_in_scope(rng, scope);
+        match components[rng.gen_range(0..components.len())] {
+            NeuronScope::INPUT => Some(NeuronLocation::Input(rng.gen_range(0..I))),
+            NeuronScope::HIDDEN => if self.hidden_layers.is_empty() {
+                None
+            } else {
+                Some(NeuronLocation::Hidden(rng.gen_range(0..self.hidden_layers.len())))
+            },
+            NeuronScope::OUTPUT => Some(NeuronLocation::Output(rng.gen_range(0..O))),
+            _ => unreachable!()
         }
-
-        loc
     }
 
     /// Gets a random connection and weight from the neural network.
@@ -469,14 +473,16 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             // add connection
             let weight = rng.gen::<f32>();
 
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-
-            let mut connection = Connection { from, to };
-            while !self.add_connection(connection, weight) {
-                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-                connection = Connection { from, to };
+            // TODO make this not look nested and gross
+            if let Some(from) = self.random_location_in_scope(rng, !NeuronScope::OUTPUT) {
+                if let Some(to) = self.random_location_in_scope(rng, !NeuronScope::INPUT) {
+                    let mut connection = Connection { from, to };
+                    while !self.add_connection(connection, weight) {
+                        let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT).unwrap();
+                        let to = self.random_location_in_scope(rng, !NeuronScope::INPUT).unwrap();
+                        connection = Connection { from, to };
+                    }
+                }
             }
         }
 
