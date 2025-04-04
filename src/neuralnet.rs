@@ -8,7 +8,6 @@ use std::{
 
 use atomic_float::AtomicF32;
 use genetic_rs::prelude::*;
-use rand::Rng;
 use replace_with::replace_with_or_abort;
 
 use crate::{
@@ -16,6 +15,7 @@ use crate::{
     activation_fn,
 };
 
+use rand::Rng as RandRNG;
 use rayon::prelude::*;
 
 #[cfg(feature = "serde")]
@@ -23,6 +23,22 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
+
+#[cfg(feature = "tracing")]
+use tracing::*;
+
+// TODO export this type in `genetic-rs` and use that instead.
+#[cfg(feature = "tracing")]
+pub trait Rng: rand::Rng + std::fmt::Debug {}
+
+#[cfg(feature = "tracing")]
+impl<T: rand::Rng + std::fmt::Debug> Rng for T {}
+
+#[cfg(not(feature = "tracing"))]
+pub trait Rng: rand::Rng {}
+
+#[cfg(not(feature = "tracing"))]
+impl<T: rand::Rng> Rng for T {}
 
 /// The mutation settings for [`NeuralNetwork`].
 /// Does not affect [`NeuralNetwork::mutate`], only [`NeuralNetwork::divide`] and [`NeuralNetwork::crossover`].
@@ -78,6 +94,7 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     // TODO option to set default output layer activations
     /// Creates a new random neural network with the given settings.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn new(mutation_settings: MutationSettings, rng: &mut impl Rng) -> Self {
         let mut output_layer = Vec::with_capacity(O);
 
@@ -131,6 +148,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Runs the neural network, propagating values from input to output layer.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
@@ -505,7 +523,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Splits a random connection in the network, if there are any.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn split_random_connection(&mut self, rng: &mut impl Rng) -> bool {
+
         if let Some((conn, _)) = self.random_connection(rng) {
             self.split_connection(conn, rng);
             return true;
@@ -516,6 +536,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 }
 
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
+    #[cfg_attr(feature = "tracing", instrument)]
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
         self.mutate_weights(rate);
 
@@ -534,6 +555,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 }
 
 impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O> {
+    #[cfg_attr(feature = "tracing", instrument)]
     fn divide(&self, rng: &mut impl Rng) -> Self {
         let mut child = self.clone();
 
@@ -546,7 +568,8 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
 }
 
 impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, O> {
-    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+    #[cfg_attr(feature = "tracing", instrument)]
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {        
         let mut output_layer = self.output_layer.clone();
 
         for (i, n) in output_layer.iter_mut().enumerate() {
