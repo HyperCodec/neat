@@ -145,7 +145,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         cache.output()
     }
-
+    
     fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
 
@@ -185,6 +185,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Split a [`Connection`] into two of the same weight, joined by a new [`Neuron`] in the hidden layer(s).
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
         let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
 
@@ -214,6 +215,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Returns false if the connection is cyclic.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn is_connection_safe(&self, connection: Connection) -> bool {
         let mut visited = HashSet::from([connection.from]);
 
@@ -221,6 +223,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     // TODO maybe parallelize
+    #[cfg_attr(feature = "tracing", instrument)]
     fn dfs(&self, visited: &mut HashSet<NeuronLocation>, current: NeuronLocation) -> bool {
         if !visited.insert(current) {
             return false;
@@ -320,6 +323,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Remove a connection and any hanging neurons caused by the deletion.
     /// Returns whether a hanging neuron (i.e. a neuron with no inputs) was removed.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         if self.get_neuron(connection.to).input_count == 0 {
             println!("erroneous network: {self:#?}");
@@ -371,6 +375,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    #[cfg_attr(feature = "tracing", instrument)]
     unsafe fn downshift_connections(&mut self, i: usize) {
         let removed_connections = AtomicUsize::new(0);
         self.input_layer.par_iter_mut().for_each(|n| {
@@ -420,6 +425,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Recalculates the [`input_count`][`Neuron::input_count`] field for all neurons in the network,
     /// as well as the [`total_connections`][`NeuralNetwork::total_connections`] field on the NeuralNetwork.
     /// Deletes any hidden layer neurons with an [`input_count`][`Neuron::input_count`] of 0.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn recalculate_connections(&mut self) {
         // TODO optimization/parallelization.
         unsafe { self.clear_input_counts() };
@@ -681,6 +687,7 @@ pub struct Neuron {
 
 impl Neuron {
     /// Creates a new neuron with a specified activation function and outputs.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn new_with_activation(
         outputs: Vec<(NeuronLocation, f32)>,
         activation_fn: ActivationFn,
@@ -696,6 +703,7 @@ impl Neuron {
 
     /// Creates a new neuron with the given output locations.
     /// Chooses a random activation function within the specified scope.
+    #[cfg_attr(feature = "tracing", instrument)]
     pub fn new(
         outputs: Vec<(NeuronLocation, f32)>,
         current_scope: NeuronScope,
@@ -801,6 +809,7 @@ impl Neuron {
         self.outputs[rng.random_range(0..self.outputs.len())]
     }
 
+    #[cfg_attr(feature = "tracing", instrument)]
     pub(crate) fn handle_removed(&mut self, i: usize) -> usize {
         // TODO par_iter_mut or something instead of replace
         let removed = AtomicUsize::new(0);
