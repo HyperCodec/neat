@@ -15,7 +15,6 @@ use crate::{
     activation_fn,
 };
 
-use rand::Rng as RandRNG;
 use rayon::prelude::*;
 
 #[cfg(feature = "serde")]
@@ -26,19 +25,6 @@ use serde_big_array::BigArray;
 
 #[cfg(feature = "tracing")]
 use tracing::*;
-
-// TODO export this type in `genetic-rs` and use that instead.
-#[cfg(feature = "tracing")]
-pub trait Rng: rand::Rng + std::fmt::Debug {}
-
-#[cfg(feature = "tracing")]
-impl<T: rand::Rng + std::fmt::Debug> Rng for T {}
-
-#[cfg(not(feature = "tracing"))]
-pub trait Rng: rand::Rng {}
-
-#[cfg(not(feature = "tracing"))]
-impl<T: rand::Rng> Rng for T {}
 
 /// The mutation settings for [`NeuralNetwork`].
 /// Does not affect [`NeuralNetwork::mutate`], only [`NeuralNetwork::divide`] and [`NeuralNetwork::crossover`].
@@ -111,20 +97,20 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         for _ in 0..I {
             let mut already_chosen = Vec::new();
-            let conns = rng.gen_range(1..=O);
+            let conns = rng.random_range(1..=O);
             total_connections += conns;
 
             let outputs = (0..conns)
                 .map(|_| {
-                    let mut j = rng.gen_range(0..O);
+                    let mut j = rng.random_range(0..O);
                     while already_chosen.contains(&j) {
-                        j = rng.gen_range(0..O);
+                        j = rng.random_range(0..O);
                     }
 
                     output_layer[j].input_count += 1;
                     already_chosen.push(j);
 
-                    (NeuronLocation::Output(j), rng.gen())
+                    (NeuronLocation::Output(j), rng.random())
                 })
                 .collect();
 
@@ -275,17 +261,17 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Get a random valid location within the network.
     pub fn random_location(&self, rng: &mut impl Rng) -> NeuronLocation {
         if self.hidden_layers.is_empty() {
-            return match rng.gen_range(0..2) {
-                0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
-                1 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
+            return match rng.random_range(0..2) {
+                0 => NeuronLocation::Input(rng.random_range(0..self.input_layer.len())),
+                1 => NeuronLocation::Output(rng.random_range(0..self.output_layer.len())),
                 _ => unreachable!(),
             };
         }
 
-        match rng.gen_range(0..3) {
-            0 => NeuronLocation::Input(rng.gen_range(0..self.input_layer.len())),
-            1 => NeuronLocation::Hidden(rng.gen_range(0..self.hidden_layers.len())),
-            2 => NeuronLocation::Output(rng.gen_range(0..self.output_layer.len())),
+        match rng.random_range(0..3) {
+            0 => NeuronLocation::Input(rng.random_range(0..self.input_layer.len())),
+            1 => NeuronLocation::Hidden(rng.random_range(0..self.hidden_layers.len())),
+            2 => NeuronLocation::Output(rng.random_range(0..self.output_layer.len())),
             _ => unreachable!(),
         }
     }
@@ -298,18 +284,18 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     ) -> Option<NeuronLocation> {
         let components: Vec<_> = scope.iter().collect();
 
-        match components[rng.gen_range(0..components.len())] {
-            NeuronScope::INPUT => Some(NeuronLocation::Input(rng.gen_range(0..I))),
+        match components[rng.random_range(0..components.len())] {
+            NeuronScope::INPUT => Some(NeuronLocation::Input(rng.random_range(0..I))),
             NeuronScope::HIDDEN => {
                 if self.hidden_layers.is_empty() {
                     None
                 } else {
                     Some(NeuronLocation::Hidden(
-                        rng.gen_range(0..self.hidden_layers.len()),
+                        rng.random_range(0..self.hidden_layers.len()),
                     ))
                 }
             }
-            NeuronScope::OUTPUT => Some(NeuronLocation::Output(rng.gen_range(0..O))),
+            NeuronScope::OUTPUT => Some(NeuronLocation::Output(rng.random_range(0..O))),
             _ => unreachable!(),
         }
     }
@@ -478,17 +464,17 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn mutate_weights(&mut self, rate: f32) {
         self.map_weights(|w| {
             // TODO maybe `Send`able rng.
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
 
-            if rng.gen::<f32>() <= rate {
-                *w += rng.gen_range(-rate..rate);
+            if rng.random::<f32>() <= rate {
+                *w += rng.random_range(-rate..rate);
             }
         });
     }
 
     /// Creates a random valid connection, if one can be made.
     pub fn add_random_connection(&mut self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
-        let weight = rng.gen::<f32>();
+        let weight = rng.random::<f32>();
 
         // TODO make this not look nested and gross
         if let Some(from) = self.random_location_in_scope(rng, !NeuronScope::OUTPUT) {
@@ -540,15 +526,15 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
         self.mutate_weights(rate);
 
-        if rng.gen::<f32>() <= rate && self.total_connections > 0 {
+        if rng.random::<f32>() <= rate && self.total_connections > 0 {
             self.split_random_connection(rng);
         }
 
-        if rng.gen::<f32>() <= rate || self.total_connections == 0 {
+        if rng.random::<f32>() <= rate || self.total_connections == 0 {
             self.add_random_connection(rng);
         }
 
-        if rng.gen::<f32>() <= rate && self.total_connections > 0 {
+        if rng.random::<f32>() <= rate && self.total_connections > 0 {
             self.remove_random_connection(rng);
         }
     }
@@ -573,7 +559,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
         let mut output_layer = self.output_layer.clone();
 
         for (i, n) in output_layer.iter_mut().enumerate() {
-            if rng.gen::<f32>() >= 0.5 {
+            if rng.random::<f32>() >= 0.5 {
                 *n = other.output_layer[i].clone();
             }
         }
@@ -596,7 +582,7 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
         let mut hidden_layers = Vec::with_capacity(hidden_len);
 
         for i in 0..hidden_len {
-            if rng.gen::<f32>() >= 0.5 {
+            if rng.random::<f32>() >= 0.5 {
                 if let Some(n) = smaller.hidden_layers.get(i) {
                     let mut n = n.clone();
 
@@ -623,14 +609,14 @@ impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, 
         let mut input_layer = self.input_layer.clone();
 
         for (i, n) in input_layer.iter_mut().enumerate() {
-            if rng.gen::<f32>() >= 0.5 {
+            if rng.random::<f32>() >= 0.5 {
                 *n = other.input_layer[i].clone();
             }
             n.prune_invalid_outputs(hidden_len, O);
         }
 
         // crossover mutation settings just in case.
-        let mutation_settings = if rng.gen::<f32>() >= 0.5 {
+        let mutation_settings = if rng.random::<f32>() >= 0.5 {
             self.mutation_settings.clone()
         } else {
             other.mutation_settings.clone()
@@ -703,7 +689,7 @@ impl Neuron {
         Self {
             input_count: 0,
             outputs,
-            bias: rng.gen(),
+            bias: rng.random(),
             activation_fn,
         }
     }
@@ -740,7 +726,7 @@ impl Neuron {
 
         Self::new_with_activation(
             outputs,
-            activations.remove(rng.gen_range(0..activations.len())),
+            activations.remove(rng.random_range(0..activations.len())),
             rng,
         )
     }
@@ -794,7 +780,7 @@ impl Neuron {
         while i < self.outputs.len() {
             let o = &mut self.outputs[i];
             if o.0 == loc {
-                o.1 += rng.gen_range(-max..max);
+                o.1 += rng.random_range(-max..max);
 
                 return Some(o.1);
             }
@@ -812,7 +798,7 @@ impl Neuron {
             panic!("cannot sample outputs from a neuron with no outputs");
         }
 
-        self.outputs[rng.gen_range(0..self.outputs.len())]
+        self.outputs[rng.random_range(0..self.outputs.len())]
     }
 
     pub(crate) fn handle_removed(&mut self, i: usize) -> usize {

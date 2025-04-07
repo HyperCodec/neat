@@ -1,5 +1,4 @@
 use neat::*;
-use rand::prelude::*;
 
 // derive some traits so that we can use this agent with `genetic-rs`.
 #[derive(Debug, Clone, PartialEq, CrossoverReproduction, DivisionReproduction, RandomlyMutable)]
@@ -11,7 +10,7 @@ impl Prunable for MyAgentGenome {}
 
 impl GenerateRandom for MyAgentGenome {
     // allows us to use `Vec::gen_random` for the initial population.
-    fn gen_random(rng: &mut impl rand::Rng) -> Self {
+    fn gen_random(rng: &mut impl Rng) -> Self {
         Self {
             brain: NeuralNetwork::new(MutationSettings::default(), rng),
         }
@@ -24,13 +23,13 @@ fn inverse_error(expected: f32, actual: f32) -> f32 {
 }
 
 fn fitness(agent: &MyAgentGenome) -> f32 {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut fit = 0.;
 
     for _ in 0..10 {
         // run the test multiple times for consistency
 
-        let inputs = [rng.gen(), rng.gen(), rng.gen()];
+        let inputs = [rng.random(), rng.random(), rng.random()];
 
         // try to force the network to learn to do some basic logic
         let expected0: f32 = (inputs[0] >= 0.5 && inputs[1] < 0.5).into();

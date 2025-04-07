@@ -1,5 +1,4 @@
 use crate::{activation::NeuronScope, *};
-use rand::prelude::*;
 
 // no support for tuple structs derive in genetic-rs yet :(
 #[derive(Debug, Clone, PartialEq)]
@@ -14,13 +13,13 @@ impl RandomlyMutable for Agent {
 }
 
 impl DivisionReproduction for Agent {
-    fn divide(&self, rng: &mut impl rand::Rng) -> Self {
+    fn divide(&self, rng: &mut impl Rng) -> Self {
         Self(self.0.divide(rng))
     }
 }
 
 impl CrossoverReproduction for Agent {
-    fn crossover(&self, other: &Self, rng: &mut impl rand::Rng) -> Self {
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         Self(self.0.crossover(&other.0, rng))
     }
 }
@@ -35,7 +34,7 @@ struct GuessTheNumber(f32);
 
 impl GuessTheNumber {
     fn new(rng: &mut impl Rng) -> Self {
-        Self(rng.gen())
+        Self(rng.random())
     }
 
     fn guess(&self, n: f32) -> Option<f32> {
@@ -53,7 +52,7 @@ impl GuessTheNumber {
 }
 
 fn fitness(agent: &Agent) -> f32 {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let mut fitness = 0.;
 
@@ -124,7 +123,7 @@ fn crossover() {
 #[cfg(feature = "serde")]
 #[test]
 fn serde() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let net: NeuralNetwork<5, 10> = NeuralNetwork::new(MutationSettings::default(), &mut rng);
 
     let text = serde_json::to_string(&net).unwrap();
@@ -174,7 +173,7 @@ fn neural_net_cache_sync() {
 }
 
 fn small_test_network() -> NeuralNetwork<1, 1> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let input = Neuron::new(
         vec![
@@ -221,7 +220,7 @@ fn remove_neuron() {
 
 #[test]
 fn recalculate_connections() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let input = Neuron::new(
         vec![
@@ -324,7 +323,7 @@ fn remove_connection() {
 
 #[test]
 fn random_location_in_scope() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut network = small_test_network();
 
     assert_eq!(
@@ -352,7 +351,7 @@ fn random_location_in_scope() {
 
 #[test]
 fn split_connection() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut network = small_test_network();
 
     network.split_connection(
