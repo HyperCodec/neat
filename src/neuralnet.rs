@@ -145,7 +145,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         cache.output()
     }
-    
+
     fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
         let loc = loc.as_ref();
 
@@ -517,7 +517,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Splits a random connection in the network, if there are any.
     #[cfg_attr(feature = "tracing", instrument)]
     pub fn split_random_connection(&mut self, rng: &mut impl Rng) -> bool {
-
         if let Some((conn, _)) = self.random_connection(rng) {
             self.split_connection(conn, rng);
             return true;
@@ -561,7 +560,7 @@ impl<const I: usize, const O: usize> DivisionReproduction for NeuralNetwork<I, O
 
 impl<const I: usize, const O: usize> CrossoverReproduction for NeuralNetwork<I, O> {
     #[cfg_attr(feature = "tracing", instrument)]
-    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {        
+    fn crossover(&self, other: &Self, rng: &mut impl Rng) -> Self {
         let mut output_layer = self.output_layer.clone();
 
         for (i, n) in output_layer.iter_mut().enumerate() {
