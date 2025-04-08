@@ -10,8 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
     fmt,
+    sync::{Arc, RwLock},
 };
 
 use crate::NeuronLocation;
