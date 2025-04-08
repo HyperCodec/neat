@@ -105,6 +105,16 @@ impl Default for ActivationRegistry {
     }
 }
 
+impl fmt::Debug for ActivationRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let keys: Vec<_> = self.fns.keys().collect();
+
+        f.debug_struct("ActivationRegistry")
+            .field("fns", &keys)
+            .finish()
+    }
+}
+
 /// A trait that represents an activation method.
 pub trait Activation {
     /// The activation function.
