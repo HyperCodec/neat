@@ -10,8 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
-    fmt,
     sync::{Arc, RwLock},
+    fmt,
 };
 
 use crate::NeuronLocation;
@@ -102,6 +102,16 @@ impl Default for ActivationRegistry {
         });
 
         s
+    }
+}
+
+impl fmt::Debug for ActivationRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let keys: Vec<_> = self.fns.keys().collect();
+
+        f.debug_struct("ActivationRegistry")
+            .field("fns", &keys)
+            .finish()
     }
 }
 
