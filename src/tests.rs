@@ -208,7 +208,7 @@ fn small_test_network() -> NeuralNetwork<1, 1> {
 fn remove_neuron() {
     let mut network = small_test_network();
 
-    network.remove_neuron(NeuronLocation::Hidden(1));
+    network.remove_neuron(&NeuronLocation::Hidden(1));
 
     assert_eq!(network.total_connections, 4);
 
