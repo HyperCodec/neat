@@ -356,8 +356,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Remove a neuron and downshift all connection indexes to compensate for it.
     #[cfg_attr(feature = "tracing", instrument)]
     pub fn remove_neuron(&mut self, loc: &NeuronLocation) {
-        let loc = loc.as_ref();
-
         if let NeuronLocation::Hidden(i) = loc {
             let n = self.hidden_layers.remove(*i);
 
