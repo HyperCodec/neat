@@ -1,5 +1,8 @@
 use neat::*;
 
+#[cfg(feature = "tracing")]
+use tracing_subscriber::EnvFilter;
+
 // derive some traits so that we can use this agent with `genetic-rs`.
 #[derive(Debug, Clone, PartialEq, CrossoverReproduction, DivisionReproduction, RandomlyMutable)]
 struct MyAgentGenome {
@@ -46,6 +49,14 @@ fn fitness(agent: &MyAgentGenome) -> f32 {
 }
 
 fn main() {
+    #[cfg(feature = "tracing")]
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env()
+                .unwrap_or(EnvFilter::from("DEBUG"))
+        )
+        .init();
+
     let mut sim = GeneticSim::new(
         // create a population of 100 random neural networks
         Vec::gen_random(2),

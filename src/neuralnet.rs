@@ -190,7 +190,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let newloc = NeuronLocation::Hidden(self.hidden_layers.len());
 
         let a = self.get_neuron_mut(connection.from);
-        let weight = unsafe { a.remove_connection(connection.to) }.unwrap();
+        let weight = unsafe { a.remove_connection(&connection.to) }.unwrap();
 
         a.outputs.push((newloc, weight));
 
@@ -326,13 +326,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     #[cfg_attr(feature = "tracing", instrument)]
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         if self.get_neuron(connection.to).input_count == 0 {
-            println!("erroneous network: {self:#?}");
+            #[cfg(feature = "tracing")]
+            warn!("erroneous network: {self:#?}");
             self.recalculate_connections();
-            println!("after recalculating: {self:#?}");
         }
 
         let a = self.get_neuron_mut(connection.from);
-        unsafe { a.remove_connection(connection.to) }.unwrap();
+        unsafe { a.remove_connection(&connection.to) }.unwrap();
 
         // if connection.from.is_hidden() && a.outputs.len() == 0 {
         //     // removes neurons with no outputs
@@ -346,7 +346,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         b.input_count -= 1;
 
         if b.input_count == 0 && connection.to.is_hidden() {
-            self.remove_neuron(connection.to);
+            self.remove_neuron(&connection.to);
             return true;
         }
 
@@ -354,7 +354,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Remove a neuron and downshift all connection indexes to compensate for it.
-    pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
+    #[cfg_attr(feature = "tracing", instrument)]
+    pub fn remove_neuron(&mut self, loc: &NeuronLocation) {
         let loc = loc.as_ref();
 
         if let NeuronLocation::Hidden(i) = loc {
@@ -480,6 +481,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Creates a random valid connection, if one can be made.
     pub fn add_random_connection(&mut self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
+        #[cfg(feature = "tracing")]
+        trace!("adding connection");
         let weight = rng.random::<f32>();
 
         // TODO make this not look nested and gross
@@ -500,16 +503,25 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             }
         }
 
+        #[cfg(feature = "tracing")]
+        trace!("No possible connections");
+
         None
     }
 
     /// Removes a random connnection from the network and returns it, if there are any.
     pub fn remove_random_connection(&mut self, rng: &mut impl Rng) -> Option<(Connection, f32)> {
+        #[cfg(feature = "tracing")]
+        trace!("removing random connection");
+
         if let Some(output) = self.random_connection(rng) {
             self.remove_connection(output.0);
 
             return Some(output);
         }
+
+        #[cfg(feature = "tracing")]
+        trace!("no connections to remove");
 
         None
     }
@@ -517,10 +529,16 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Splits a random connection in the network, if there are any.
     #[cfg_attr(feature = "tracing", instrument)]
     pub fn split_random_connection(&mut self, rng: &mut impl Rng) -> bool {
+        #[cfg(feature = "tracing")]
+        trace!("splitting random connection");
+
         if let Some((conn, _)) = self.random_connection(rng) {
             self.split_connection(conn, rng);
             return true;
         }
+
+        #[cfg(feature = "tracing")]
+        trace!("no connections to split");
 
         false
     }
@@ -744,10 +762,10 @@ impl Neuron {
     }
 
     /// Get the weight of the provided output location. Returns `None` if not found.
-    pub fn get_weight(&self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
-        let loc = *output.as_ref();
+    #[cfg_attr(feature = "tracing", instrument)]
+    pub fn get_weight(&self, output: &NeuronLocation) -> Option<f32> {
         for out in &self.outputs {
-            if out.0 == loc {
+            if out.0 == *output {
                 return Some(out.1);
             }
         }
@@ -760,12 +778,12 @@ impl Neuron {
     /// # Safety
     /// This is marked as unsafe because it will not update the destination's [`input_count`][Neuron::input_count].
     /// Similar to [`add_connection_raw`][NeuralNetwork::add_connection_raw], this does not mean UB or anything.
-    pub unsafe fn remove_connection(&mut self, output: impl AsRef<NeuronLocation>) -> Option<f32> {
-        let loc = *output.as_ref();
+    #[cfg_attr(feature = "tracing", instrument)]
+    pub unsafe fn remove_connection(&mut self, output: &NeuronLocation) -> Option<f32> {
         let mut i = 0;
 
         while i < self.outputs.len() {
-            if self.outputs[i].0 == loc {
+            if self.outputs[i].0 == *output {
                 return Some(self.outputs.remove(i).1);
             }
             i += 1;
