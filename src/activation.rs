@@ -72,7 +72,7 @@ impl ActivationRegistry {
         }
     }
 
-    /// Gets a Vec of all the activation functions registered. Unless you need an owned value, use [fns][ActivationRegistry::fns].values() instead.
+    /// Gets a Vec of all the activation functions registered. Use [fns][ActivationRegistry::fns] if you only need an iterator.
     pub fn activations(&self) -> Vec<ActivationFn> {
         self.fns.values().cloned().collect()
     }
