@@ -4,6 +4,7 @@ pub mod builtin;
 use bitflags::bitflags;
 use builtin::*;
 
+use genetic_rs::prelude::rand;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -56,13 +57,13 @@ pub fn batch_register_activation(acts: impl IntoIterator<Item = ActivationFn>) {
 /// A registry of the different possible activation functions.
 pub struct ActivationRegistry {
     /// The currently-registered activation functions.
-    pub fns: HashMap<String, ActivationFn>,
+    pub fns: HashMap<&'static str, ActivationFn>,
 }
 
 impl ActivationRegistry {
     /// Registers an activation function.
     pub fn register(&mut self, activation: ActivationFn) {
-        self.fns.insert(activation.name.clone(), activation);
+        self.fns.insert(activation.name, activation);
     }
 
     /// Registers multiple activation functions at once.
@@ -82,8 +83,30 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| !a.scope.contains(NeuronScope::NONE) && a.scope.contains(scope))
+            .filter(|a| a.scope.contains(scope))
             .collect()
+    }
+
+    /// Clears all existing values in the activation registry.
+    pub fn clear(&mut self) {
+        self.fns.clear();
+    }
+
+    /// Fetches a random activation fn that applies to the provided scope.
+    pub fn random_activation_in_scope(&self, scope: NeuronScope, rng: &mut impl rand::Rng) -> ActivationFn {
+        let mut iter = self.fns.values().cycle();
+        let num_iterations = rng.random_range(0..self.fns.len()-1);
+
+        for _ in 0..num_iterations {
+            iter.next().unwrap();
+        }
+
+        let mut val = iter.next().unwrap();
+        while !val.scope.contains(scope) {
+            val = iter.next().unwrap();
+        }
+
+        val.clone()
     }
 }
 
@@ -125,12 +148,12 @@ pub struct ActivationFn {
 
     /// The scope defining where the activation function can appear.
     pub scope: NeuronScope,
-    pub(crate) name: String,
+    pub(crate) name: &'static str,
 }
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: String) -> Self {
+    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: &'static str) -> Self {
         Self { func, name, scope }
     }
 }

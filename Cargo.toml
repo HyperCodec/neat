@@ -28,9 +28,10 @@ bitflags = "2.10.0"
 genetic-rs = { version = "1.0.0", features = ["rayon", "derive"] }
 lazy_static = "1.5.0"
 rayon = "1.11.0"
-replace_with = "0.1.7"
+replace_with = "0.1.8"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde-big-array = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
-serde_json = "1.0.138"
+serde_json = "1.0.149"
+union-find = "0.4.3"

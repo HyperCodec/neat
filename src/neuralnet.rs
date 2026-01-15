@@ -74,7 +74,7 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     // TODO option to set default output layer activations
     /// Creates a new random neural network with the given settings.
-    pub fn new(mutation_settings: MutationSettings, rng: &mut impl Rng) -> Self {
+    pub fn new(mutation_settings: MutationSettings, rng: &mut impl rand::Rng) -> Self {
         let mut output_layer = Vec::with_capacity(O);
 
         for _ in 0..O {
@@ -88,20 +88,21 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let mut input_layer = Vec::with_capacity(I);
 
         for _ in 0..I {
-            let mut already_chosen = Vec::new();
-            let outputs = (0..rng.random_range(1..=O))
-                .map(|_| {
-                    let mut j = rng.random_range(0..O);
-                    while already_chosen.contains(&j) {
-                        j = rng.random_range(0..O);
-                    }
+            let mut already_chosen = HashSet::new();
+            let num_outputs = rng.random_range(1..=O);
+            let mut outputs = HashMap::with_capacity(num_outputs);
 
-                    output_layer[j].input_count += 1;
-                    already_chosen.push(j);
+            for _ in 0..num_outputs {
+                let mut j = rng.random_range(0..O);
+                while already_chosen.contains(&j) {
+                    j = rng.random_range(0..O);
+                }
 
-                    (NeuronLocation::Output(j), rng.random())
-                })
-                .collect();
+                output_layer[j].input_count += 1;
+                already_chosen.insert(j);
+
+                outputs.insert(NeuronLocation::Output(j), rng.random());
+            }
 
             input_layer.push(Neuron::new_with_activation(
                 outputs,
@@ -133,9 +134,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         cache.output()
     }
 
-    fn eval(&self, loc: impl AsRef<NeuronLocation>, cache: Arc<NeuralNetCache<I, O>>) {
-        let loc = loc.as_ref();
-
+    fn eval(&self, loc: NeuronLocation, cache: Arc<NeuralNetCache<I, O>>) {
         if !cache.claim(loc) {
             // some other thread is already
             // waiting to do this task, currently doing it, or done.
@@ -152,39 +151,69 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let val = cache.get(loc);
         let n = self.get_neuron(loc);
 
-        n.outputs.par_iter().for_each(|(loc2, weight)| {
+        n.outputs.par_iter().for_each(|(&loc2, weight)| {
             cache.add(loc2, n.activate(val * weight));
             self.eval(loc2, cache.clone());
         });
     }
 
     /// Get a neuron at the specified [`NeuronLocation`].
-    pub fn get_neuron(&self, loc: impl AsRef<NeuronLocation>) -> &Neuron {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => &self.input_layer[*i],
-            NeuronLocation::Hidden(i) => &self.hidden_layers[*i],
-            NeuronLocation::Output(i) => &self.output_layer[*i],
+    pub fn get_neuron(&self, loc: NeuronLocation) -> &Neuron {
+        match loc {
+            NeuronLocation::Input(i) => &self.input_layer[i],
+            NeuronLocation::Hidden(i) => &self.hidden_layers[i],
+            NeuronLocation::Output(i) => &self.output_layer[i],
         }
     }
 
     /// Get a mutable reference to the neuron at the specified [`NeuronLocation`].
-    pub fn get_neuron_mut(&mut self, loc: impl AsRef<NeuronLocation>) -> &mut Neuron {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => &mut self.input_layer[*i],
-            NeuronLocation::Hidden(i) => &mut self.hidden_layers[*i],
-            NeuronLocation::Output(i) => &mut self.output_layer[*i],
+    pub fn get_neuron_mut(&mut self, loc: NeuronLocation) -> &mut Neuron {
+        match loc {
+            NeuronLocation::Input(i) => &mut self.input_layer[i],
+            NeuronLocation::Hidden(i) => &mut self.hidden_layers[i],
+            NeuronLocation::Output(i) => &mut self.output_layer[i],
         }
+    }
+
+    /// Adds a new neuron to hidden layer. Updates [`input_count`][Neuron::input_count]s automatically.
+    pub fn add_neuron(&mut self, n: Neuron) {
+        for loc in n.outputs.keys() {
+            let n2 = self.get_neuron_mut(*loc);
+            n2.input_count += 1;
+        }
+        
+        self.hidden_layers.push(n);
     }
 
     /// Split a [`Connection`] into two of the same weight, joined by a new [`Neuron`] in the hidden layer(s).
     pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
-        todo!()
+        let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
+
+        let a = self.get_neuron_mut(connection.from);
+        let w = a.outputs.remove(&connection.to).expect("invalid connection.to");
+
+        a.outputs.insert(new_loc, w);
+
+        let mut outputs = HashMap::new();
+        outputs.insert(connection.to, w);
+        let mut new_n = Neuron::new(outputs, NeuronScope::HIDDEN, rng);
+        new_n.input_count = 1;
+        self.hidden_layers.push(new_n);
+    }
+
+    /// Changes a neuron's activation function to a random one in its scope.
+    pub fn mutate_activation(&mut self, loc: NeuronLocation, rng: &mut impl Rng) {
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+        self.get_neuron_mut(loc).activation_fn = reg.random_activation_in_scope(loc.into(), rng);
     }
 
     /// Adds a connection but does not check for cyclic linkages.
     pub fn add_connection_unchecked(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.insert(connection.to, weight);
+        
+        let b = self.get_neuron_mut(connection.to);
+        b.input_count += 1;
     }
 
     /// Returns false if the connection is cyclic.
@@ -194,8 +223,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.dfs(&mut visited, connection.to)
     }
 
-    // TODO maybe parallelize
-    // TODO properly test this for bugs
     fn dfs(&self, visited: &mut HashSet<NeuronLocation>, current: NeuronLocation) -> bool {
         if !visited.insert(current) {
             return false;
@@ -225,10 +252,17 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Get a random valid location within the network.
     pub fn random_location(&self, rng: &mut impl Rng) -> NeuronLocation {
+        if self.hidden_layers.is_empty() {
+            if rng.random_range(0..=1) != 0 {
+                return NeuronLocation::Input(rng.random_range(0..I));
+            }
+            return NeuronLocation::Output(rng.random_range(0..O));
+        }
+
         match rng.random_range(0..3) {
-            0 => NeuronLocation::Input(rng.random_range(0..self.input_layer.len())),
+            0 => NeuronLocation::Input(rng.random_range(0..I)),
             1 => NeuronLocation::Hidden(rng.random_range(0..self.hidden_layers.len())),
-            2 => NeuronLocation::Output(rng.random_range(0..self.output_layer.len())),
+            2 => NeuronLocation::Output(rng.random_range(0..O)),
             _ => unreachable!(),
         }
     }
@@ -249,15 +283,42 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         loc
     }
 
-    /// Remove a connection and any hanging neurons caused by the deletion.
-    /// Returns whether there was a hanging neuron.
+    /// Remove a connection and any hanging neurons caused by the deletion
+    /// (with the exception of output neurons).
+    /// Returns whether it deleted a hanging neuron.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
-        todo!()
+        let a = self.get_neuron_mut(connection.from);
+        a.outputs.remove(&connection.to).expect("invalid connection");
+
+        let b = self.get_neuron_mut(connection.to);
+        b.input_count -= 1;
+
+        if connection.to.is_hidden() && b.input_count == 0 {
+            // hanging neuron that must be deleted.
+            self.remove_neuron(connection.to);
+            return true;
+        }
+
+        false
     }
 
     /// Remove a neuron and downshift all connection indexes to compensate for it.
-    pub fn remove_neuron(&mut self, loc: impl AsRef<NeuronLocation>) {
-        todo!()
+    /// This will also deal with hanging neurons and such.
+    pub fn remove_neuron(&mut self, loc: NeuronLocation) {
+        if !loc.is_hidden() {
+            panic!("cannot remove neurons in input or output layer");
+        }
+
+        let n = self.get_neuron(loc);
+        let locs: Vec<_> = n.outputs.keys().cloned().collect();
+        for loc2 in locs {
+            self.remove_connection(Connection { from: loc, to: loc2 });
+        }
+
+        let i = loc.unwrap();
+        self.hidden_layers.remove(i);
+
+        self.downshift_connections(i);
     }
 
     fn downshift_connections(&mut self, i: usize) {
@@ -362,7 +423,6 @@ impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
     }
 }
 
-#[allow(clippy::needless_range_loop)]
 impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
     fn crossover(&self, other: &Self, rate: f32, rng: &mut impl prelude::Rng) -> Self {
         todo!()
