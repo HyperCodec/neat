@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use crate::*;
 use genetic_rs::prelude::rand::{SeedableRng, rngs::StdRng};
-use union_find::{QuickFindUf, UnionBySize, UnionFind};
 
 fn loc_to_index<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>, loc: NeuronLocation) -> usize {
     match loc {
@@ -10,28 +11,43 @@ fn loc_to_index<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>, loc: 
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+enum GraphCheckState {
+    CurrentCycle,
+    Checked,
+}
+
 fn assert_graph_invariants<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) {
-    let total_len = I + O + net.hidden_layers.len();
-    let mut uf = QuickFindUf::<UnionBySize>::new(total_len);
-    
+    let mut visited = HashMap::new();
+
     for i in 0..I {
-        let loc = NeuronLocation::Input(i);
-        let a_ident = uf.find(i);
+        dfs(net, NeuronLocation::Input(i), &mut visited);
+    }
 
-        let n = net.get_neuron(loc);
-        for (loc2, _) in &n.outputs {
-            let b_ident = uf.find(loc_to_index(net, *loc2));
-            if !uf.union(a_ident, b_ident) {
-                panic!("cycle detected in network: {loc:?} -> {loc2:?}");
-            }
+    for i in 0..net.hidden_layers.len() {
+        let loc = NeuronLocation::Hidden(i);
+        if !visited.contains_key(&loc) {
+            panic!("hanging neuron: {loc:?}");
+        }
+    }
+}
+
+// simple colored dfs for checking graph invariants.
+fn dfs<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>, loc: NeuronLocation, visited: &mut HashMap<NeuronLocation, GraphCheckState>) {
+    if let Some(existing) = visited.get(&loc) {
+        match *existing {
+            GraphCheckState::CurrentCycle => panic!("cycle detected on {loc:?}"),
+            GraphCheckState::Checked => return,
         }
     }
 
-    for i in 0..total_len {
-        if uf.find(i) >= I {
-            panic!("found hanging neuron");
-        }
+    visited.insert(loc, GraphCheckState::CurrentCycle);
+
+    for loc2 in net.get_neuron(loc).outputs.keys() {
+        dfs(net, *loc2, visited);
     }
+
+    visited.insert(loc, GraphCheckState::Checked);
 }
 
 struct InputCountsCache<const O: usize> {
@@ -72,7 +88,7 @@ fn assert_cache_consistency<const I: usize, const O: usize>(net: &NeuralNetwork<
 
     for (i, x) in cache.hidden_layers.into_iter().enumerate() {
         if x == 0 {
-            // maybe redundant because of graph invariants, but oh well
+            // redundant because of graph invariants, but better safe than sorry
             panic!("found hanging neuron");
         }
 
@@ -85,7 +101,7 @@ fn assert_cache_consistency<const I: usize, const O: usize>(net: &NeuralNetwork<
 }
 
 fn assert_network_invariants<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) {
-    // assert_graph_invariants(net);
+    assert_graph_invariants(net);
     assert_cache_consistency(net);
     // TODO other invariants
 }

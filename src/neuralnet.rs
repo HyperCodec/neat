@@ -148,11 +148,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             rayon::yield_now();
         }
 
-        let val = cache.get(loc);
         let n = self.get_neuron(loc);
+        let val = n.activate(cache.get(loc));
 
         n.outputs.par_iter().for_each(|(&loc2, weight)| {
-            cache.add(loc2, n.activate(val * weight));
+            cache.add(loc2, val * weight);
             self.eval(loc2, cache.clone());
         });
     }
