@@ -2,14 +2,7 @@ use std::collections::HashMap;
 
 use crate::*;
 use genetic_rs::prelude::rand::{SeedableRng, rngs::StdRng};
-
-fn loc_to_index<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>, loc: NeuronLocation) -> usize {
-    match loc {
-        NeuronLocation::Input(i) => i,
-        NeuronLocation::Hidden(i) => I + i,
-        NeuronLocation::Output(i) => I + net.hidden_layers.len() + i,
-    }
-}
+use rayon::prelude::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum GraphCheckState {
@@ -107,11 +100,13 @@ fn assert_network_invariants<const I: usize, const O: usize>(net: &NeuralNetwork
 }
 
 const TEST_COUNT: u64 = 1000;
-fn rng_test(test: impl Fn(&mut StdRng)) {
-    for seed in 0..TEST_COUNT {
-        let mut rng = StdRng::seed_from_u64(seed);
-        test(&mut rng);
-    }
+fn rng_test(test: impl Fn(&mut StdRng) + Sync) {
+    (0..TEST_COUNT)
+        .into_par_iter()
+        .for_each(|seed| {
+            let mut rng = StdRng::seed_from_u64(seed);
+            test(&mut rng);
+        });
 }
 
 #[test]
