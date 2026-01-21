@@ -166,6 +166,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
+    /// Returns whether there is a neuron at the location
+    pub fn neuron_exists(&self, loc: NeuronLocation) -> bool {
+        match loc {
+            NeuronLocation::Input(i) => i < I,
+            NeuronLocation::Hidden(i) => i < self.hidden_layers.len(),
+            NeuronLocation::Output(i) => i < O,
+        }
+    }
+
     /// Get a mutable reference to the neuron at the specified [`NeuronLocation`].
     pub fn get_neuron_mut(&mut self, loc: NeuronLocation) -> &mut Neuron {
         match loc {
@@ -176,13 +185,28 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Adds a new neuron to hidden layer. Updates [`input_count`][Neuron::input_count]s automatically.
-    pub fn add_neuron(&mut self, n: Neuron) {
-        for loc in n.outputs.keys() {
-            let n2 = self.get_neuron_mut(*loc);
-            n2.input_count += 1;
+    /// Removes any output connections that point to invalid neurons or would result in cyclic linkage.
+    /// Returns whether all output connections were valid.
+    /// Due to the cyclic check, this function has time complexity O(nm), where n is the number of neurons
+    /// and m is the number of output connections.
+    pub fn add_neuron(&mut self, mut n: Neuron) -> bool {
+        let mut valid = true;
+        let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
+        let outputs = n.outputs.keys().cloned().collect::<Vec<_>>();
+        for loc in outputs {
+            if !self.neuron_exists(loc) || !self.is_connection_safe(Connection { from: new_loc, to: loc }) {
+                n.outputs.remove(&loc);
+                valid = false;
+                continue;
+            }
+
+            let n = self.get_neuron_mut(loc);
+            n.input_count += 1;
         }
-        
+
         self.hidden_layers.push(n);
+
+        valid
     }
 
     /// Split a [`Connection`] into two of the same weight, joined by a new [`Neuron`] in the hidden layer(s).
@@ -216,10 +240,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         b.input_count += 1;
     }
 
-    /// Returns false if the connection is cyclic.
+    /// Returns false if the connection is cyclic or the input/output neurons are otherwise invalid in some other way.
+    /// Can be O(n) over the number of neurons in the network.
     pub fn is_connection_safe(&self, connection: Connection) -> bool {
+        if connection.from.is_output() || connection.to.is_input() || (self.neuron_exists(connection.from) && self.get_neuron(connection.from).outputs.contains_key(&connection.to)) {
+            return false;
+        }
         let mut visited = HashSet::from([connection.from]);
-
         self.dfs(&mut visited, connection.to)
     }
 
@@ -238,9 +265,34 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         true
     }
 
-    /// Safe, checked add connection method. Returns false if it aborted connecting due to cyclic linkage.
+    /// Safe, checked add connection method. Returns false if it aborted due to cyclic linkage.
+    /// Note that checking for cyclic linkage is O(n) over all neurons in the network, which
+    /// may be expensive for larger networks.
     pub fn add_connection(&mut self, connection: Connection, weight: f32) -> bool {
-        todo!()
+        if !self.is_connection_safe(connection) {
+            return false;
+        }
+
+        self.add_connection_unchecked(connection, weight);
+
+        true
+    }
+
+    /// Attempts to add a random connection, retrying if unsafe.
+    /// Returns the connection if it established one before reaching max_retries.
+    pub fn add_random_connection(&mut self, max_retries: usize, rng: &mut impl rand::Rng) -> Option<Connection> {
+        for _ in 0..max_retries {
+            let a = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+            let b = self.random_location_in_scope(rng, !NeuronScope::INPUT);
+
+            let conn = Connection { from: a, to: b };
+            let rate = self.mutation_settings.mutation_rate;
+            if self.add_connection(conn, rng.random_range(-rate..rate)) {
+                return Some(conn);
+            }
+        }
+        
+        None
     }
 
     /// Mutates a connection's weight.
@@ -270,22 +322,32 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Get a random valid location within a [`NeuronScope`].
     pub fn random_location_in_scope(
         &self,
-        rng: &mut impl Rng,
+        rng: &mut impl rand::Rng,
         scope: NeuronScope,
     ) -> NeuronLocation {
-        let loc = self.random_location(rng);
-
-        // this is a lazy and slow way of donig it, TODO better version.
-        if !scope.contains(NeuronScope::from(loc)) {
-            return self.random_location_in_scope(rng, scope);
+        if scope == NeuronScope::NONE {
+            panic!("cannot select from empty scope");
         }
 
-        loc
+        let mut layers = Vec::with_capacity(3);
+        if scope.contains(NeuronScope::INPUT) {
+            layers.push((NeuronLocation::Input(0), I));
+        }
+        if scope.contains(NeuronScope::HIDDEN) && !self.hidden_layers.is_empty() {
+            layers.push((NeuronLocation::Hidden(0), self.hidden_layers.len()));
+        }
+        if scope.contains(NeuronScope::OUTPUT) {
+            layers.push((NeuronLocation::Output(0), O));
+        }
+
+        let (mut loc, size) = layers[rng.random_range(0..layers.len())];  
+        loc.set_inner(rng.random_range(0..size));
+        loc      
     }
 
     /// Remove a connection and any hanging neurons caused by the deletion
-    /// (with the exception of output neurons).
-    /// Returns whether it deleted a hanging neuron.
+    /// (with the exception of output layer neurons).
+    /// Returns whether it removed a hanging neuron.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.remove(&connection.to).expect("invalid connection");
@@ -302,7 +364,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         false
     }
 
-    /// Remove a neuron and downshift all connection indexes to compensate for it.
+    /// Remove a neuron and downshift all connection indices to compensate for it.
     /// This will also deal with hanging neurons and such.
     pub fn remove_neuron(&mut self, loc: NeuronLocation) {
         if !loc.is_hidden() {
@@ -344,13 +406,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     fn clear_input_counts(&mut self) {
-        // not sure whether all this parallelism is necessary or if it will just generate overhead
-        // rayon::scope(|s| {
-        //     s.spawn(|_| self.input_layer.par_iter_mut().for_each(|n| n.input_count = 0));
-        //     s.spawn(|_| self.hidden_layers.par_iter_mut().for_each(|n| n.input_count = 0));
-        //     s.spawn(|_| self.output_layer.par_iter_mut().for_each(|n| n.input_count = 0));
-        // });
-
         self.input_layer
             .par_iter_mut()
             .for_each(|n| n.input_count = 0);
@@ -485,14 +540,13 @@ impl Neuron {
     /// Chooses a random activation function within the specified scope.
     pub fn new(
         outputs: HashMap<NeuronLocation, f32>,
-        current_scope: NeuronScope,
+        scope: NeuronScope,
         rng: &mut impl Rng,
     ) -> Self {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
-        let activations = reg.activations_in_scope(current_scope);
-        drop(reg);
+        let act = reg.random_activation_in_scope(scope, rng);
 
-        Self::new_with_activations(outputs, activations, rng)
+        Self::new_with_activation(outputs, act, rng)
     }
 
     /// Creates a new neuron with the given outputs.
@@ -529,8 +583,8 @@ impl Neuron {
         rate: f32,
         rng: &mut impl Rng,
     ) -> Option<f32> {
-        if let Some(mut w) = self.outputs.get_mut(&output) {
-            *w += rng.random_range(-rate..rate);
+        if let Some(w) = self.outputs.get_mut(&output) {
+            *w += rng.random_range(-rate..=rate);
             return Some(*w);
         }
 
@@ -599,6 +653,16 @@ impl NeuronLocation {
             Self::Input(i) => *i,
             Self::Hidden(i) => *i,
             Self::Output(i) => *i,
+        }
+    }
+
+    /// Sets the inner index value without changing the layer.
+    pub fn set_inner(&mut self, v: usize) {
+        // there's gotta be a cleaner way of doing this
+        match self {
+            Self::Input(i) => *i = v,
+            Self::Hidden(i) => *i = v,
+            Self::Output(i) => *i = v,
         }
     }
 }

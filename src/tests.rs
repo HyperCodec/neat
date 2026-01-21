@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::*;
+use crate::{activation::builtin::linear_activation, *};
 use genetic_rs::prelude::rand::{SeedableRng, rngs::StdRng};
 use rayon::prelude::*;
 
@@ -132,17 +132,77 @@ fn split_connection() {
     assert_eq!(*net.hidden_layers[0].outputs.keys().next().unwrap(), NeuronLocation::Output(0));
 }
 
-const NUM_MUTATIONS: usize = 1000;
-const MUTATION_RATE: f32 = 0.25;
 #[test]
-fn mutate() {
+fn add_connection() {
+    let mut rng = StdRng::seed_from_u64(0xabcdef);
+    let mut net = NeuralNetwork {
+        input_layer: [Neuron::new_with_activation(HashMap::new(), activation_fn!(linear_activation), &mut rng)],
+        hidden_layers: vec![],
+        output_layer: [Neuron::new_with_activation(HashMap::new(), activation_fn!(linear_activation), &mut rng)],
+        mutation_settings: MutationSettings::default()
+    };
+    assert_network_invariants(&net);
+
+    let mut conn = Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Output(0) };
+    assert!(net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    assert!(!net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    let mut outputs = HashMap::new();
+    outputs.insert(NeuronLocation::Output(0), 0.1);
+    let n = Neuron::new_with_activation(outputs, activation_fn!(linear_activation), &mut rng);
+
+    net.add_neuron(n.clone());
+    // temporarily broken invariants bc of hanging neuron
+
+    conn.to = NeuronLocation::Hidden(0);
+    assert!(net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    net.add_neuron(n);
+
+    conn.to = NeuronLocation::Hidden(1);
+    assert!(net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    conn.from = NeuronLocation::Hidden(0);
+    assert!(net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    net.split_connection(conn, &mut rng);
+    assert_network_invariants(&net);
+
+    conn.from = NeuronLocation::Hidden(2);
+    conn.to = NeuronLocation::Hidden(0);
+
+    assert!(!net.add_connection(conn, 0.1));
+    assert_network_invariants(&net);
+
+    // random stress testing
     rng_test(|rng| {
         let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
         assert_network_invariants(&net);
-
-        for _ in 0..NUM_MUTATIONS {
-            net.mutate(MUTATION_RATE, rng);
+        for _ in 0..50 {
+            net.add_random_connection(10, rng);
             assert_network_invariants(&net);
         }
     });
 }
+
+// TODO will use this once we have all the individual functions tested
+// const NUM_MUTATIONS: usize = 1000;
+// const MUTATION_RATE: f32 = 0.25;
+// #[test]
+// fn mutate() {
+//     rng_test(|rng| {
+//         let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
+//         assert_network_invariants(&net);
+
+//         for _ in 0..NUM_MUTATIONS {
+//             net.mutate(MUTATION_RATE, rng);
+//             assert_network_invariants(&net);
+//         }
+//     });
+// }

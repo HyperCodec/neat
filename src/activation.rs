@@ -21,11 +21,11 @@ use crate::NeuronLocation;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(std::sync::Arc::new($F), NeuronScope::default(), stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $crate::activation::NeuronScope::default(), stringify!($F).into())
     };
 
     ($F: path, $S: expr) => {
-        ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F).into())
     };
 
     {$($F: path),*} => {
