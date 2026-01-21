@@ -93,9 +93,13 @@ impl ActivationRegistry {
     }
 
     /// Fetches a random activation fn that applies to the provided scope.
-    pub fn random_activation_in_scope(&self, scope: NeuronScope, rng: &mut impl rand::Rng) -> ActivationFn {
+    pub fn random_activation_in_scope(
+        &self,
+        scope: NeuronScope,
+        rng: &mut impl rand::Rng,
+    ) -> ActivationFn {
         let mut iter = self.fns.values().cycle();
-        let num_iterations = rng.random_range(0..self.fns.len()-1);
+        let num_iterations = rng.random_range(0..self.fns.len() - 1);
 
         for _ in 0..num_iterations {
             iter.next().unwrap();
@@ -153,7 +157,11 @@ pub struct ActivationFn {
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: &'static str) -> Self {
+    pub fn new(
+        func: Arc<dyn Activation + Send + Sync>,
+        scope: NeuronScope,
+        name: &'static str,
+    ) -> Self {
         Self { func, name, scope }
     }
 }

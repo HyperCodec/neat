@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{activation::builtin::linear_activation, *};
-use genetic_rs::prelude::rand::{SeedableRng, rngs::StdRng};
+use genetic_rs::prelude::rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -26,7 +26,11 @@ fn assert_graph_invariants<const I: usize, const O: usize>(net: &NeuralNetwork<I
 }
 
 // simple colored dfs for checking graph invariants.
-fn dfs<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>, loc: NeuronLocation, visited: &mut HashMap<NeuronLocation, GraphCheckState>) {
+fn dfs<const I: usize, const O: usize>(
+    net: &NeuralNetwork<I, O>,
+    loc: NeuronLocation,
+    visited: &mut HashMap<NeuronLocation, GraphCheckState>,
+) {
     if let Some(existing) = visited.get(&loc) {
         match *existing {
             GraphCheckState::CurrentCycle => panic!("cycle detected on {loc:?}"),
@@ -101,12 +105,10 @@ fn assert_network_invariants<const I: usize, const O: usize>(net: &NeuralNetwork
 
 const TEST_COUNT: u64 = 1000;
 fn rng_test(test: impl Fn(&mut StdRng) + Sync) {
-    (0..TEST_COUNT)
-        .into_par_iter()
-        .for_each(|seed| {
-            let mut rng = StdRng::seed_from_u64(seed);
-            test(&mut rng);
-        });
+    (0..TEST_COUNT).into_par_iter().for_each(|seed| {
+        let mut rng = StdRng::seed_from_u64(seed);
+        test(&mut rng);
+    });
 }
 
 #[test]
@@ -124,26 +126,49 @@ fn split_connection() {
 
     let mut net = NeuralNetwork::<1, 1>::new(MutationSettings::default(), &mut rng);
     assert_network_invariants(&net);
-    
-    net.split_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Output(0) }, &mut rng);
+
+    net.split_connection(
+        Connection {
+            from: NeuronLocation::Input(0),
+            to: NeuronLocation::Output(0),
+        },
+        &mut rng,
+    );
     assert_network_invariants(&net);
 
-    assert_eq!(*net.input_layer[0].outputs.keys().next().unwrap(), NeuronLocation::Hidden(0));
-    assert_eq!(*net.hidden_layers[0].outputs.keys().next().unwrap(), NeuronLocation::Output(0));
+    assert_eq!(
+        *net.input_layer[0].outputs.keys().next().unwrap(),
+        NeuronLocation::Hidden(0)
+    );
+    assert_eq!(
+        *net.hidden_layers[0].outputs.keys().next().unwrap(),
+        NeuronLocation::Output(0)
+    );
 }
 
 #[test]
 fn add_connection() {
     let mut rng = StdRng::seed_from_u64(0xabcdef);
     let mut net = NeuralNetwork {
-        input_layer: [Neuron::new_with_activation(HashMap::new(), activation_fn!(linear_activation), &mut rng)],
+        input_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
         hidden_layers: vec![],
-        output_layer: [Neuron::new_with_activation(HashMap::new(), activation_fn!(linear_activation), &mut rng)],
-        mutation_settings: MutationSettings::default()
+        output_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+        mutation_settings: MutationSettings::default(),
     };
     assert_network_invariants(&net);
 
-    let mut conn = Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Output(0) };
+    let mut conn = Connection {
+        from: NeuronLocation::Input(0),
+        to: NeuronLocation::Output(0),
+    };
     assert!(net.add_connection(conn, 0.1));
     assert_network_invariants(&net);
 

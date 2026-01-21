@@ -1,7 +1,8 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        Arc, atomic::{AtomicBool, AtomicUsize, Ordering}
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
     },
 };
 
@@ -194,7 +195,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
         let outputs = n.outputs.keys().cloned().collect::<Vec<_>>();
         for loc in outputs {
-            if !self.neuron_exists(loc) || !self.is_connection_safe(Connection { from: new_loc, to: loc }) {
+            if !self.neuron_exists(loc)
+                || !self.is_connection_safe(Connection {
+                    from: new_loc,
+                    to: loc,
+                })
+            {
                 n.outputs.remove(&loc);
                 valid = false;
                 continue;
@@ -214,7 +220,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
 
         let a = self.get_neuron_mut(connection.from);
-        let w = a.outputs.remove(&connection.to).expect("invalid connection.to");
+        let w = a
+            .outputs
+            .remove(&connection.to)
+            .expect("invalid connection.to");
 
         a.outputs.insert(new_loc, w);
 
@@ -235,7 +244,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn add_connection_unchecked(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
         a.outputs.insert(connection.to, weight);
-        
+
         let b = self.get_neuron_mut(connection.to);
         b.input_count += 1;
     }
@@ -243,7 +252,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns false if the connection is cyclic or the input/output neurons are otherwise invalid in some other way.
     /// Can be O(n) over the number of neurons in the network.
     pub fn is_connection_safe(&self, connection: Connection) -> bool {
-        if connection.from.is_output() || connection.to.is_input() || (self.neuron_exists(connection.from) && self.get_neuron(connection.from).outputs.contains_key(&connection.to)) {
+        if connection.from.is_output()
+            || connection.to.is_input()
+            || (self.neuron_exists(connection.from)
+                && self
+                    .get_neuron(connection.from)
+                    .outputs
+                    .contains_key(&connection.to))
+        {
             return false;
         }
         let mut visited = HashSet::from([connection.from]);
@@ -280,7 +296,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Attempts to add a random connection, retrying if unsafe.
     /// Returns the connection if it established one before reaching max_retries.
-    pub fn add_random_connection(&mut self, max_retries: usize, rng: &mut impl rand::Rng) -> Option<Connection> {
+    pub fn add_random_connection(
+        &mut self,
+        max_retries: usize,
+        rng: &mut impl rand::Rng,
+    ) -> Option<Connection> {
         for _ in 0..max_retries {
             let a = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
             let b = self.random_location_in_scope(rng, !NeuronScope::INPUT);
@@ -291,7 +311,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 return Some(conn);
             }
         }
-        
+
         None
     }
 
@@ -340,9 +360,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             layers.push((NeuronLocation::Output(0), O));
         }
 
-        let (mut loc, size) = layers[rng.random_range(0..layers.len())];  
+        let (mut loc, size) = layers[rng.random_range(0..layers.len())];
         loc.set_inner(rng.random_range(0..size));
-        loc      
+        loc
     }
 
     /// Remove a connection and any hanging neurons caused by the deletion
@@ -350,7 +370,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns whether it removed a hanging neuron.
     pub fn remove_connection(&mut self, connection: Connection) -> bool {
         let a = self.get_neuron_mut(connection.from);
-        a.outputs.remove(&connection.to).expect("invalid connection");
+        a.outputs
+            .remove(&connection.to)
+            .expect("invalid connection");
 
         let b = self.get_neuron_mut(connection.to);
         b.input_count -= 1;
@@ -374,7 +396,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let n = self.get_neuron(loc);
         let locs: Vec<_> = n.outputs.keys().cloned().collect();
         for loc2 in locs {
-            self.remove_connection(Connection { from: loc, to: loc2 });
+            self.remove_connection(Connection {
+                from: loc,
+                to: loc2,
+            });
         }
 
         let i = loc.unwrap();
@@ -469,7 +494,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
     fn divide(&self, rate: f32, rng: &mut impl prelude::Rng) -> Self {
         let mut child = self.clone();
-        
+
         for _ in 0..self.mutation_settings.mutation_passes {
             child.mutate(rate, rng);
         }
