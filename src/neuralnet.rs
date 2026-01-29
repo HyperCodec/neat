@@ -315,6 +315,35 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         None
     }
 
+    /// Attempts to remove a random connection, retrying if the neuron it found
+    /// doesn't have any outbound connections.
+    /// Returns the connection if it removed one before reaching max_retries.
+    pub fn remove_random_connection(
+        &mut self,
+        max_retries: usize,
+        rng: &mut impl rand::Rng,
+    ) -> Option<Connection> {
+        for _ in 0..max_retries {
+            let a = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
+            
+            let an = self.get_neuron(a);
+            if an.outputs.is_empty() {
+                continue;
+            }
+
+            let mut iter = an.outputs.keys().skip(rng.random_range(0..an.outputs.len()));
+            let b = iter.next().unwrap();
+
+            let conn = Connection { from: a, to: *b };
+
+            self.remove_connection(conn);
+
+            return Some(conn);
+        }
+
+        None
+    }
+
     /// Mutates a connection's weight.
     pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
         let rate = self.mutation_settings.weight_mutation_amount;

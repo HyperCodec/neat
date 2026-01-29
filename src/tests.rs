@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{activation::builtin::linear_activation, *};
+use crate::{activation::{NeuronScope, builtin::linear_activation}, *};
 use genetic_rs::prelude::rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
@@ -211,6 +211,51 @@ fn add_connection() {
         assert_network_invariants(&net);
         for _ in 0..50 {
             net.add_random_connection(10, rng);
+            assert_network_invariants(&net);
+        }
+    });
+}
+
+#[test]
+fn remove_connection() {
+    let mut rng = StdRng::seed_from_u64(0xabcdef);
+    let mut net = NeuralNetwork {
+        input_layer: [Neuron::new_with_activation(
+            HashMap::from([(NeuronLocation::Output(0), 0.1), (NeuronLocation::Hidden(0), 1.0)]),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+        hidden_layers: vec![Neuron {
+            input_count: 1,
+            outputs: HashMap::new(), // not sure whether i want neurons with no outputs to break the invariant/be removed
+            bias: 0.0,
+            activation_fn: activation_fn!(linear_activation),
+        }],
+        output_layer: [Neuron {
+            input_count: 1,
+            outputs: HashMap::new(),
+            bias: 0.0,
+            activation_fn: activation_fn!(linear_activation),
+        }],
+        mutation_settings: MutationSettings::default(),
+    };
+    assert_network_invariants(&net);
+
+    assert!(!net.remove_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Output(0)}));
+    assert_network_invariants(&net);
+
+    assert!(net.remove_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Hidden(0)}));
+    assert_network_invariants(&net);
+    
+    rng_test(|rng| {
+        let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
+        assert_network_invariants(&net);
+
+        for _ in 0..50 {
+            net.add_random_connection(10, rng);
+            assert_network_invariants(&net);
+
+            net.remove_random_connection(5, rng);
             assert_network_invariants(&net);
         }
     });
