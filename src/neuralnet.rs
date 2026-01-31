@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Arc,
@@ -315,33 +315,50 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         None
     }
 
-    /// Attempts to remove a random connection, retrying if the neuron it found
+    /// Attempts to get a random connection, retrying if the neuron it found
     /// doesn't have any outbound connections.
-    /// Returns the connection if it removed one before reaching max_retries.
-    pub fn remove_random_connection(
+    /// Returns the connection if it found one before reaching max_retries.
+    pub fn get_random_connection(
         &mut self,
         max_retries: usize,
         rng: &mut impl rand::Rng,
     ) -> Option<Connection> {
         for _ in 0..max_retries {
             let a = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            
             let an = self.get_neuron(a);
             if an.outputs.is_empty() {
                 continue;
             }
 
-            let mut iter = an.outputs.keys().skip(rng.random_range(0..an.outputs.len()));
+            let mut iter = an
+                .outputs
+                .keys()
+                .skip(rng.random_range(0..an.outputs.len()));
             let b = iter.next().unwrap();
 
             let conn = Connection { from: a, to: *b };
-
-            self.remove_connection(conn);
-
             return Some(conn);
         }
 
         None
+    }
+
+    /// Attempts to remove a random connection, retrying if the neuron it found
+    /// doesn't have any outbound connections. Also removes hanging neurons created
+    /// by removing the connection.
+    ///
+    /// Returns the connection if it removed one before reaching max_retries.
+    pub fn remove_random_connection(
+        &mut self,
+        max_retries: usize,
+        rng: &mut impl rand::Rng,
+    ) -> Option<Connection> {
+        if let Some(conn) = self.get_random_connection(max_retries, rng) {
+            self.remove_connection(conn);
+            Some(conn)
+        } else {
+            None
+        }
     }
 
     /// Mutates a connection's weight.
@@ -394,50 +411,86 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         loc
     }
 
-    /// Remove a connection and any hanging neurons caused by the deletion
+    /// Remove a connection and indicate whether the destination neuron became hanging
     /// (with the exception of output layer neurons).
-    /// Returns whether it removed a hanging neuron.
-    pub fn remove_connection(&mut self, connection: Connection) -> bool {
+    /// Returns `true` if the destination neuron has input_count == 0 and should be removed.
+    /// Callers must handle the removal of the destination neuron if needed.
+    pub fn remove_connection_raw(&mut self, connection: Connection) -> bool {
         let a = self.get_neuron_mut(connection.from);
-        a.outputs
-            .remove(&connection.to)
-            .expect("invalid connection");
-
-        let b = self.get_neuron_mut(connection.to);
-        b.input_count -= 1;
-
-        if connection.to.is_hidden() && b.input_count == 0 {
-            // hanging neuron that must be deleted.
-            self.remove_neuron(connection.to);
-            return true;
+        if a.outputs.remove(&connection.to).is_none() {
+            panic!("invalid connection");
         }
 
+        let b = self.get_neuron_mut(connection.to);
+
+        // if the invariants held at the beginning of the call,
+        // this should never underflow.
+        b.input_count -= 1;
+
+        // signal removal
+        connection.to.is_hidden() && b.input_count == 0
+    }
+
+    /// Remove a connection and downshift all connection indices to compensate for it.
+    /// This will also deal with hanging neurons iteratively to avoid recursion that
+    /// can invalidate stored indices during nested deletions.
+    /// This method is preferable to [`remove_connection_raw`][NeuralNetwork::remove_connection_raw] for a majority of usecases,
+    /// as it preserves the invariants of the neural network.
+    pub fn remove_connection(&mut self, conn: Connection) -> bool {
+        if self.remove_connection_raw(conn) {
+            self.remove_neuron(conn.to);
+            return true;
+        }
         false
     }
 
     /// Remove a neuron and downshift all connection indices to compensate for it.
-    /// This will also deal with hanging neurons and such.
+    /// This will also deal with hanging neurons iteratively to avoid recursion that
+    /// can invalidate stored indices during nested deletions.
     pub fn remove_neuron(&mut self, loc: NeuronLocation) {
         if !loc.is_hidden() {
             panic!("cannot remove neurons in input or output layer");
         }
 
-        let n = self.get_neuron(loc);
-        let locs: Vec<_> = n.outputs.keys().cloned().collect();
-        for loc2 in locs {
-            self.remove_connection(Connection {
-                from: loc,
-                to: loc2,
-            });
+        let mut work = VecDeque::new();
+        work.push_back(loc);
+
+        while let Some(cur_loc) = work.pop_front() {
+            // if the neuron was already removed due to earlier deletions, skip.
+            // i don't think it realistically should ever happen, but just in case.
+            if !self.neuron_exists(cur_loc) {
+                continue;
+            }
+
+            let outputs = {
+                let n = self.get_neuron(cur_loc);
+                n.outputs.keys().cloned().collect::<Vec<_>>()
+            };
+
+            for target in outputs {
+                if self.remove_connection_raw(Connection {
+                    from: cur_loc,
+                    to: target,
+                }) {
+                    // target became hanging; schedule it for removal.
+                    work.push_back(target);
+                }
+            }
+
+            // Re-check that the neuron still exists and is hidden before removing.
+            if !self.neuron_exists(cur_loc) || !cur_loc.is_hidden() {
+                continue;
+            }
+
+            let i = cur_loc.unwrap();
+            if i < self.hidden_layers.len() {
+                self.hidden_layers.remove(i);
+                self.downshift_connections(i, &mut work); // O(n^2) bad, but we can optimize later if it's a problem.
+            }
         }
-
-        let i = loc.unwrap();
-        self.hidden_layers.remove(i);
-
-        self.downshift_connections(i);
     }
 
-    fn downshift_connections(&mut self, i: usize) {
+    fn downshift_connections(&mut self, i: usize, work: &mut VecDeque<NeuronLocation>) {
         self.input_layer
             .par_iter_mut()
             .for_each(|n| n.downshift_outputs(i));
@@ -445,11 +498,16 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.hidden_layers
             .par_iter_mut()
             .for_each(|n| n.downshift_outputs(i));
+
+        work.par_iter_mut().for_each(|loc| match loc {
+            NeuronLocation::Hidden(j) if *j > i => *j -= 1,
+            _ => {}
+        });
     }
 
-    // TODO maybe more parallelism and pass Connection info.
+    // TODO maybe pass Connection info.
     /// Runs the `callback` on the weights of the neural network in parallel, allowing it to modify weight values.
-    pub fn map_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
+    pub fn mutate_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
         for n in &mut self.input_layer {
             n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
         }
@@ -457,6 +515,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for n in &mut self.hidden_layers {
             n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
         }
+    }
+
+    /// Runs the `callback` on the neurons of the neural network in parallel, allowing it to modify neuron values.
+    pub fn mutate_neurons(&mut self, callback: impl Fn(&mut Neuron) + Sync) {
+        self.input_layer.par_iter_mut().for_each(|n| callback(n));
+        self.hidden_layers.par_iter_mut().for_each(|n| callback(n));
+        self.output_layer.par_iter_mut().for_each(|n| callback(n));
     }
 
     fn clear_input_counts(&mut self) {
@@ -478,45 +543,37 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         // for each type of mutation
         if rng.random::<f32>() <= rate {
             // split connection
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let n = self.get_neuron(from);
-            let (to, _) = n.random_output(rng);
-
-            self.split_connection(Connection { from, to }, rng);
-        }
-
-        if rng.random::<f32>() <= rate {
-            // add connection
-            let weight = rng.random::<f32>();
-
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-
-            let mut connection = Connection { from, to };
-            while !self.add_connection(connection, weight) {
-                let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-                let to = self.random_location_in_scope(rng, !NeuronScope::INPUT);
-                connection = Connection { from, to };
+            // TODO add a setting for max_retries
+            if let Some(conn) = self.get_random_connection(10, rng) {
+                self.split_connection(conn, rng);
             }
         }
 
         if rng.random::<f32>() <= rate {
-            // remove connection
-
-            let from = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let a = self.get_neuron(from);
-            let (to, _) = a.random_output(rng);
-
-            self.remove_connection(Connection { from, to });
+            // add connection
+            self.add_random_connection(10, rng);
         }
 
-        self.map_weights(|w| {
+        if rng.random::<f32>() <= rate {
+            // remove connection
+            self.remove_random_connection(10, rng);
+        }
+
+        self.mutate_weights(|w| {
             let mut rng = rand::rng();
 
             if rng.random::<f32>() <= rate {
                 *w += rng.random_range(-rate..rate);
             }
         });
+
+        self.mutate_neurons(|n| {
+            let mut rng = rand::rng();
+
+            if rng.random::<f32>() <= rate {
+                n.bias += rng.random_range(-rate..rate);
+            }
+        })
     }
 }
 

@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use crate::{activation::{NeuronScope, builtin::linear_activation}, *};
+use crate::{
+    activation::{builtin::linear_activation, NeuronScope},
+    *,
+};
 use genetic_rs::prelude::rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
@@ -221,7 +224,10 @@ fn remove_connection() {
     let mut rng = StdRng::seed_from_u64(0xabcdef);
     let mut net = NeuralNetwork {
         input_layer: [Neuron::new_with_activation(
-            HashMap::from([(NeuronLocation::Output(0), 0.1), (NeuronLocation::Hidden(0), 1.0)]),
+            HashMap::from([
+                (NeuronLocation::Output(0), 0.1),
+                (NeuronLocation::Hidden(0), 1.0),
+            ]),
             activation_fn!(linear_activation),
             &mut rng,
         )],
@@ -241,38 +247,55 @@ fn remove_connection() {
     };
     assert_network_invariants(&net);
 
-    assert!(!net.remove_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Output(0)}));
+    assert!(!net.remove_connection(Connection {
+        from: NeuronLocation::Input(0),
+        to: NeuronLocation::Output(0)
+    }));
     assert_network_invariants(&net);
 
-    assert!(net.remove_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Hidden(0)}));
+    assert!(net.remove_connection(Connection {
+        from: NeuronLocation::Input(0),
+        to: NeuronLocation::Hidden(0)
+    }));
     assert_network_invariants(&net);
-    
+
     rng_test(|rng| {
         let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
         assert_network_invariants(&net);
 
-        for _ in 0..50 {
+        for _ in 0..70 {
             net.add_random_connection(10, rng);
             assert_network_invariants(&net);
 
-            net.remove_random_connection(5, rng);
-            assert_network_invariants(&net);
+            if rng.random_bool(0.25) {
+                // rng allows network to form more complex edge cases.
+                net.remove_random_connection(5, rng);
+                // don't need to remove neuron since this
+                // method handles it automatically.
+                assert_network_invariants(&net);
+            }
         }
     });
 }
 
 // TODO will use this once we have all the individual functions tested
-// const NUM_MUTATIONS: usize = 1000;
-// const MUTATION_RATE: f32 = 0.25;
-// #[test]
-// fn mutate() {
-//     rng_test(|rng| {
-//         let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
-//         assert_network_invariants(&net);
+const NUM_MUTATIONS: usize = 50;
+const MUTATION_RATE: f32 = 0.25;
+#[test]
+fn mutate() {
+    rng_test(|rng| {
+        let mut net = NeuralNetwork::<10, 10>::new(
+            MutationSettings {
+                mutation_rate: MUTATION_RATE,
+                ..Default::default()
+            },
+            rng,
+        );
+        assert_network_invariants(&net);
 
-//         for _ in 0..NUM_MUTATIONS {
-//             net.mutate(MUTATION_RATE, rng);
-//             assert_network_invariants(&net);
-//         }
-//     });
-// }
+        for _ in 0..NUM_MUTATIONS {
+            net.mutate(MUTATION_RATE, rng);
+            assert_network_invariants(&net);
+        }
+    });
+}
