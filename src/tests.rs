@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    activation::{builtin::linear_activation, NeuronScope},
-    *,
-};
+use crate::{activation::builtin::linear_activation, *};
 use genetic_rs::prelude::rand::{rngs::StdRng, SeedableRng};
 use rayon::prelude::*;
 
@@ -278,7 +275,6 @@ fn remove_connection() {
     });
 }
 
-// TODO will use this once we have all the individual functions tested
 const NUM_MUTATIONS: usize = 50;
 const MUTATION_RATE: f32 = 0.25;
 #[test]

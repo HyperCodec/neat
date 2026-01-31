@@ -524,6 +524,29 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.output_layer.par_iter_mut().for_each(|n| callback(n));
     }
 
+    /// Mutates the activation functions of the neurons in the neural network.
+    pub fn mutate_activations(&mut self, rate: f32) {
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+        self.input_layer.par_iter_mut().for_each(|n| {
+            let mut rng = rand::rng();
+            if rng.random_bool(rate as f64) {
+                n.mutate_activation(&reg.activations_in_scope(NeuronScope::INPUT), &mut rng);
+            }
+        });
+        self.hidden_layers.par_iter_mut().for_each(|n| {
+            let mut rng = rand::rng();
+            if rng.random_bool(rate as f64) {
+                n.mutate_activation(&reg.activations_in_scope(NeuronScope::HIDDEN), &mut rng);
+            }
+        });
+        self.output_layer.par_iter_mut().for_each(|n| {
+            let mut rng = rand::rng();
+            if rng.random_bool(rate as f64) {
+                n.mutate_activation(&reg.activations_in_scope(NeuronScope::OUTPUT), &mut rng);
+            }
+        });
+    }
+
     fn clear_input_counts(&mut self) {
         self.input_layer
             .par_iter_mut()
@@ -541,6 +564,8 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
         // TODO maybe allow specifying probability
         // for each type of mutation
+
+        // graph mutations
         if rng.random::<f32>() <= rate {
             // split connection
             // TODO add a setting for max_retries
@@ -558,6 +583,9 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
             // remove connection
             self.remove_random_connection(10, rng);
         }
+
+        // internal mutations
+        self.mutate_activations(rate);
 
         self.mutate_weights(|w| {
             let mut rng = rand::rng();
@@ -664,12 +692,9 @@ impl Neuron {
     /// Takes a collection of activation functions and chooses a random one from them to use.
     pub fn new_with_activations(
         outputs: HashMap<NeuronLocation, f32>,
-        activations: impl IntoIterator<Item = ActivationFn>,
+        activations: &[ActivationFn],
         rng: &mut impl Rng,
     ) -> Self {
-        // TODO get random in iterator form
-        let mut activations: Vec<_> = activations.into_iter().collect();
-
         // TODO maybe Result instead.
         if activations.is_empty() {
             panic!("Empty activations list provided");
@@ -677,7 +702,7 @@ impl Neuron {
 
         Self::new_with_activation(
             outputs,
-            activations.remove(rng.random_range(0..activations.len())),
+            activations[rng.random_range(0..activations.len())].clone(),
             rng,
         )
     }
@@ -725,6 +750,15 @@ impl Neuron {
     pub fn prune_invalid_outputs(&mut self, hidden_len: usize, output_len: usize) {
         self.outputs
             .retain(|loc, _| output_exists(*loc, hidden_len, output_len));
+    }
+
+    /// Replaces the activation function with a random one.
+    pub fn mutate_activation(&mut self, activations: &[ActivationFn], rng: &mut impl Rng) {
+        if activations.is_empty() {
+            panic!("Empty activations list provided");
+        }
+
+        self.activation_fn = activations[rng.random_range(0..activations.len())].clone();
     }
 }
 
