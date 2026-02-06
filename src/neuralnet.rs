@@ -516,6 +516,35 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         });
     }
 
+    /// Recounts inputs for all neurons in the network
+    /// and removes any invalid connections.
+    pub fn reset_input_counts(&mut self) {
+        self.clear_input_counts();
+
+        for i in 0..I {
+            self.reset_inputs_for_neuron(NeuronLocation::Input(i));
+        }
+
+        for i in 0..self.hidden_layers.len() {
+            self.reset_inputs_for_neuron(NeuronLocation::Hidden(i));
+        }
+    }
+
+    fn reset_inputs_for_neuron(&mut self, loc: NeuronLocation) {
+        let outputs = self.get_neuron(loc).outputs.keys().cloned().collect::<Vec<_>>();
+        let outputs2 = outputs.into_iter().filter(|&loc| {
+            if !self.neuron_exists(loc) {
+                return false;
+            }
+
+            let target = self.get_neuron_mut(loc);
+            target.input_count += 1;
+            true
+        }).collect::<HashSet<_>>();
+
+        self.get_neuron_mut(loc).outputs.retain(|loc, _| outputs2.contains(loc));
+    }
+
     fn clear_input_counts(&mut self) {
         self.input_layer
             .par_iter_mut()
@@ -526,6 +555,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.output_layer
             .par_iter_mut()
             .for_each(|n| n.input_count = 0);
+    }
+
+    /// Iterates over the network and removes any hanging neurons in the hidden layer(s).
+    pub fn prune_hanging_neurons(&mut self) {
+        for i in 0..self.hidden_layers.len() {
+            if self.hidden_layers[i].input_count == 0 {
+                self.remove_neuron(NeuronLocation::Hidden(i));
+            }
+        }
     }
 }
 
@@ -610,7 +648,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReproductionSettings {
     /// The mutation settings to use during reproduction.
-    pub mutation_settings: MutationSettings,
+    pub mutation: MutationSettings,
 
     /// The number of times to apply mutation during reproduction.
     pub mutation_passes: usize,
@@ -619,7 +657,7 @@ pub struct ReproductionSettings {
 impl Default for ReproductionSettings {
     fn default() -> Self {
         Self {
-            mutation_settings: MutationSettings::default(),
+            mutation: MutationSettings::default(),
             mutation_passes: 3,
         }
     }
@@ -632,7 +670,7 @@ impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
         let mut child = self.clone();
 
         for _ in 0..settings.mutation_passes {
-            child.mutate(&settings.mutation_settings, rate, rng);
+            child.mutate(&settings.mutation, rate, rng);
         }
 
         child
@@ -640,9 +678,10 @@ impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
 }
 
 /// The settings used for [`NeuralNetwork`] crossover.
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct CrossoverSettings {
     /// The reproduction settings to use during crossover, which will be applied to the child after crossover.
-    pub reproduction_settings: ReproductionSettings,
+    pub repr: ReproductionSettings,
 
     // TODO other crossover settings.
 }
@@ -650,8 +689,60 @@ pub struct CrossoverSettings {
 impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
     type Context = CrossoverSettings;
 
-    fn crossover(&self, other: &Self, settings: &CrossoverSettings, rate: f32, rng: &mut impl prelude::Rng) -> Self {
-        todo!()
+    fn crossover(&self, other: &Self, settings: &CrossoverSettings, rate: f32, rng: &mut impl rand::Rng) -> Self {
+        // merge (temporarily breaking invariants) and then resolve invariants.
+        let mut child = NeuralNetwork {
+            input_layer: self.input_layer.clone(),
+            hidden_layers: vec![],
+            output_layer: self.output_layer.clone(),
+        };
+
+        for i in 0..I {
+            if rng.random_bool(0.5) {
+                child.input_layer[i] = other.input_layer[i].clone();
+            }
+        }
+        
+        for i in 0..O {
+            if rng.random_bool(0.5) {
+                child.output_layer[i] = other.output_layer[i].clone();
+            }
+        }
+
+        let larger;
+        let smaller;
+        if self.hidden_layers.len() >= other.hidden_layers.len() {
+            larger = &self.hidden_layers;
+            smaller = &other.hidden_layers;
+        } else {
+            larger = &other.hidden_layers;
+            smaller = &self.hidden_layers;
+        }
+
+        for i in 0..larger.len() {
+            if i < smaller.len() {
+                if rng.random_bool(0.5) {
+                    child.hidden_layers.push(smaller[i].clone());
+                } else {
+                    child.hidden_layers.push(larger[i].clone());
+                }
+                continue;
+            }
+
+            // larger is the only one with spare neurons, add them.
+            child.hidden_layers.push(larger[i].clone());
+        }
+
+        // resolve invariants
+        child.reset_input_counts();
+        // TODO cycle invariant
+        child.prune_hanging_neurons();
+
+        for _ in 0..settings.repr.mutation_passes {
+            child.mutate(&settings.repr.mutation, rate, rng);
+        }
+
+        child
     }
 }
 
