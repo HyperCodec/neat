@@ -25,7 +25,7 @@ serde = ["dep:serde", "dep:serde-big-array"]
 [dependencies]
 atomic_float = "1.1.0"
 bitflags = "2.10.0"
-genetic-rs = { version = "1.0.0", features = ["rayon", "derive"] }
+genetic-rs = { version = "1.1.0", features = ["rayon", "derive"] }
 lazy_static = "1.5.0"
 rayon = "1.11.0"
 replace_with = "0.1.8"

@@ -24,31 +24,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
 
-/// The mutation settings for [`NeuralNetwork`].
-/// Does not affect [`NeuralNetwork::mutate`], only [`NeuralNetwork::divide`] and [`NeuralNetwork::crossover`].
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
-pub struct MutationSettings {
-    /// The chance of each mutation type to occur.
-    pub mutation_rate: f32,
-
-    /// The number of times to try to mutate the network.
-    pub mutation_passes: usize,
-
-    /// The maximum amount that the weights will be mutated by.
-    pub weight_mutation_amount: f32,
-}
-
-impl Default for MutationSettings {
-    fn default() -> Self {
-        Self {
-            mutation_rate: 0.01,
-            mutation_passes: 3,
-            weight_mutation_amount: 0.5,
-        }
-    }
-}
-
 /// An abstract neural network type with `I` input neurons and `O` output neurons.
 /// Hidden neurons are not organized into layers, but rather float and link freely
 /// (or at least in any way that doesn't cause a cyclic dependency).
@@ -67,15 +42,12 @@ pub struct NeuralNetwork<const I: usize, const O: usize> {
     /// The output layer of neurons. Their values will be returned from [`NeuralNetwork::predict`].
     #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     pub output_layer: [Neuron; O],
-
-    /// The mutation settings for the network.
-    pub mutation_settings: MutationSettings,
 }
 
 impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     // TODO option to set default output layer activations
     /// Creates a new random neural network with the given settings.
-    pub fn new(mutation_settings: MutationSettings, rng: &mut impl rand::Rng) -> Self {
+    pub fn new(rng: &mut impl rand::Rng) -> Self {
         let mut output_layer = Vec::with_capacity(O);
 
         for _ in 0..O {
@@ -119,7 +91,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             input_layer,
             hidden_layers: vec![],
             output_layer,
-            mutation_settings,
         }
     }
 
@@ -306,8 +277,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             let b = self.random_location_in_scope(rng, !NeuronScope::INPUT);
 
             let conn = Connection { from: a, to: b };
-            let rate = self.mutation_settings.mutation_rate;
-            if self.add_connection(conn, rng.random_range(-rate..rate)) {
+            if self.add_connection(conn, rng.random()) {
                 return Some(conn);
             }
         }
@@ -362,10 +332,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Mutates a connection's weight.
-    pub fn mutate_weight(&mut self, connection: Connection, rng: &mut impl Rng) {
-        let rate = self.mutation_settings.weight_mutation_amount;
+    pub fn mutate_weight(&mut self, connection: Connection, amount: f32, rng: &mut impl Rng) {
         let n = self.get_neuron_mut(connection.from);
-        n.mutate_weight(connection.to, rate, rng).unwrap();
+        n.mutate_weight(connection.to, amount, rng).unwrap();
     }
 
     /// Get a random valid location within the network.
@@ -560,8 +529,43 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 }
 
+/// The mutation settings for [`NeuralNetwork`].
+/// Does not affect [`NeuralNetwork::mutate`], only [`NeuralNetwork::divide`] and [`NeuralNetwork::crossover`].
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq)]
+pub struct MutationSettings {
+    /// The chance of each mutation type to occur.
+    pub mutation_rate: f32,
+
+    /// The maximum amount that the weights will be mutated by in one mutation pass.
+    pub weight_mutation_amount: f32,
+
+    /// The maximum amount that biases will be mutated by in one mutation pass.
+    pub bias_mutation_amount: f32,
+
+    /// The maximum number of retries for adding connections.
+    pub max_add_retries: usize,
+
+    /// The maximum number of retries for removing connections.
+    pub max_remove_retries: usize,
+}
+
+impl Default for MutationSettings {
+    fn default() -> Self {
+        Self {
+            mutation_rate: 0.01,
+            weight_mutation_amount: 0.5,
+            bias_mutation_amount: 0.5,
+            max_add_retries: 10,
+            max_remove_retries: 10,
+        }
+    }
+}
+
 impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
-    fn mutate(&mut self, rate: f32, rng: &mut impl Rng) {
+    type Context = MutationSettings;
+
+    fn mutate(&mut self, settings: &MutationSettings, rate: f32, rng: &mut impl Rng) {
         // TODO maybe allow specifying probability
         // for each type of mutation
 
@@ -576,49 +580,70 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 
         if rng.random::<f32>() <= rate {
             // add connection
-            self.add_random_connection(10, rng);
+            self.add_random_connection(settings.max_add_retries, rng);
         }
 
         if rng.random::<f32>() <= rate {
             // remove connection
-            self.remove_random_connection(10, rng);
+            self.remove_random_connection(settings.max_remove_retries, rng);
         }
 
         // internal mutations
         self.mutate_activations(rate);
 
-        self.mutate_weights(|w| {
+        self.map_weights(|w| {
             let mut rng = rand::rng();
 
             if rng.random::<f32>() <= rate {
-                *w += rng.random_range(-rate..rate);
+                let amount = settings.weight_mutation_amount;
+                *w += rng.random_range(-amount..amount);
             }
         });
+    }
+}
 
-        self.mutate_neurons(|n| {
-            let mut rng = rand::rng();
+/// The settings used for `NeuralNetwork` mitosis.
+#[derive(Debug, Clone, PartialEq)]
+pub struct MitosisSettings {
+    /// The mutation settings to use during mitosis.
+    pub mutation_settings: MutationSettings,
 
-            if rng.random::<f32>() <= rate {
-                n.bias += rng.random_range(-rate..rate);
-            }
-        })
+    /// The number of times to apply mutation during mitosis.
+    pub mutation_passes: usize,
+}
+
+impl Default for MitosisSettings {
+    fn default() -> Self {
+        Self {
+            mutation_settings: MutationSettings::default(),
+            mutation_passes: 3,
+        }
     }
 }
 
 impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
-    fn divide(&self, rate: f32, rng: &mut impl prelude::Rng) -> Self {
+    type Context = MitosisSettings;
+
+    fn divide(&self, settings: &MitosisSettings, rate: f32, rng: &mut impl prelude::Rng) -> Self {
         let mut child = self.clone();
 
-        for _ in 0..self.mutation_settings.mutation_passes {
-            child.mutate(rate, rng);
+        for _ in 0..settings.mutation_passes {
+            child.mutate(&settings.mutation_settings, rate, rng);
         }
 
         child
     }
 }
 
+pub struct CrossoverSettings {
+    pub mutation_settings: MutationSettings,
+    pub mutation_passes: usize,
+}
+
 impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
-    fn crossover(&self, other: &Self, rate: f32, rng: &mut impl prelude::Rng) -> Self {
+    type Context = CrossoverSettings;
+
+    fn crossover(&self, other: &Self, settings: &CrossoverSettings, rate: f32, rng: &mut impl prelude::Rng) -> Self {
         todo!()
     }
 }
