@@ -548,6 +548,9 @@ pub struct MutationSettings {
 
     /// The maximum number of retries for removing connections.
     pub max_remove_retries: usize,
+
+    /// The maximum number of retries for splitting connections.
+    pub max_split_retries: usize,
 }
 
 impl Default for MutationSettings {
@@ -558,6 +561,7 @@ impl Default for MutationSettings {
             bias_mutation_amount: 0.5,
             max_add_retries: 10,
             max_remove_retries: 10,
+            max_split_retries: 10,
         }
     }
 }
@@ -573,7 +577,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         if rng.random::<f32>() <= rate {
             // split connection
             // TODO add a setting for max_retries
-            if let Some(conn) = self.get_random_connection(10, rng) {
+            if let Some(conn) = self.get_random_connection(settings.max_split_retries, rng) {
                 self.split_connection(conn, rng);
             }
         }
@@ -591,7 +595,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
         // internal mutations
         self.mutate_activations(rate);
 
-        self.map_weights(|w| {
+        self.mutate_weights(|w| {
             let mut rng = rand::rng();
 
             if rng.random::<f32>() <= rate {
@@ -602,17 +606,17 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     }
 }
 
-/// The settings used for `NeuralNetwork` mitosis.
+/// The settings used for [`NeuralNetwork`] reproduction.
 #[derive(Debug, Clone, PartialEq)]
-pub struct MitosisSettings {
-    /// The mutation settings to use during mitosis.
+pub struct ReproductionSettings {
+    /// The mutation settings to use during reproduction.
     pub mutation_settings: MutationSettings,
 
-    /// The number of times to apply mutation during mitosis.
+    /// The number of times to apply mutation during reproduction.
     pub mutation_passes: usize,
 }
 
-impl Default for MitosisSettings {
+impl Default for ReproductionSettings {
     fn default() -> Self {
         Self {
             mutation_settings: MutationSettings::default(),
@@ -622,9 +626,9 @@ impl Default for MitosisSettings {
 }
 
 impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
-    type Context = MitosisSettings;
+    type Context = ReproductionSettings;
 
-    fn divide(&self, settings: &MitosisSettings, rate: f32, rng: &mut impl prelude::Rng) -> Self {
+    fn divide(&self, settings: &ReproductionSettings, rate: f32, rng: &mut impl prelude::Rng) -> Self {
         let mut child = self.clone();
 
         for _ in 0..settings.mutation_passes {
@@ -635,9 +639,12 @@ impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
     }
 }
 
+/// The settings used for [`NeuralNetwork`] crossover.
 pub struct CrossoverSettings {
-    pub mutation_settings: MutationSettings,
-    pub mutation_passes: usize,
+    /// The reproduction settings to use during crossover, which will be applied to the child after crossover.
+    pub reproduction_settings: ReproductionSettings,
+
+    // TODO other crossover settings.
 }
 
 impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {

@@ -114,7 +114,7 @@ fn rng_test(test: impl Fn(&mut StdRng) + Sync) {
 #[test]
 fn create_network() {
     rng_test(|rng| {
-        let net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
+        let net = NeuralNetwork::<10, 10>::new(rng);
         assert_network_invariants(&net);
     });
 }
@@ -124,7 +124,7 @@ fn split_connection() {
     // rng doesn't matter here since it's just adding bias in eval
     let mut rng = StdRng::seed_from_u64(0xabcdef);
 
-    let mut net = NeuralNetwork::<1, 1>::new(MutationSettings::default(), &mut rng);
+    let mut net = NeuralNetwork::<1, 1>::new(&mut rng);
     assert_network_invariants(&net);
 
     net.split_connection(
@@ -161,7 +161,6 @@ fn add_connection() {
             activation_fn!(linear_activation),
             &mut rng,
         )],
-        mutation_settings: MutationSettings::default(),
     };
     assert_network_invariants(&net);
 
@@ -207,7 +206,7 @@ fn add_connection() {
 
     // random stress testing
     rng_test(|rng| {
-        let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
+        let mut net = NeuralNetwork::<10, 10>::new(rng);
         assert_network_invariants(&net);
         for _ in 0..50 {
             net.add_random_connection(10, rng);
@@ -240,7 +239,6 @@ fn remove_connection() {
             bias: 0.0,
             activation_fn: activation_fn!(linear_activation),
         }],
-        mutation_settings: MutationSettings::default(),
     };
     assert_network_invariants(&net);
 
@@ -257,7 +255,7 @@ fn remove_connection() {
     assert_network_invariants(&net);
 
     rng_test(|rng| {
-        let mut net = NeuralNetwork::<10, 10>::new(MutationSettings::default(), rng);
+        let mut net = NeuralNetwork::<10, 10>::new(rng);
         assert_network_invariants(&net);
 
         for _ in 0..70 {
@@ -280,17 +278,13 @@ const MUTATION_RATE: f32 = 0.25;
 #[test]
 fn mutate() {
     rng_test(|rng| {
-        let mut net = NeuralNetwork::<10, 10>::new(
-            MutationSettings {
-                mutation_rate: MUTATION_RATE,
-                ..Default::default()
-            },
-            rng,
-        );
+        let mut net = NeuralNetwork::<10, 10>::new(rng);
         assert_network_invariants(&net);
 
+        let settings = MutationSettings::default();
+
         for _ in 0..NUM_MUTATIONS {
-            net.mutate(MUTATION_RATE, rng);
+            net.mutate(&settings, MUTATION_RATE, rng);
             assert_network_invariants(&net);
         }
     });
