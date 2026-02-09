@@ -393,14 +393,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let b = self.get_neuron_mut(connection.to);
 
         // if the invariants held at the beginning of the call,
-        // this should never underflow.
-        b.input_count -= 1;
+        // this should never underflow, but some cases like remove_cycles
+        // may temporarily break invariants.
+        b.input_count = b.input_count.saturating_sub(1);
 
         // signal removal
         connection.to.is_hidden() && b.input_count == 0
     }
 
-    /// Remove a connection and downshift all connection indices to compensate for it.
+    /// Remove a connection from the network.
     /// This will also deal with hanging neurons iteratively to avoid recursion that
     /// can invalidate stored indices during nested deletions.
     /// This method is preferable to [`remove_connection_raw`][NeuralNetwork::remove_connection_raw] for a majority of usecases,
@@ -414,16 +415,20 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Remove a neuron and downshift all connection indices to compensate for it.
+    /// Returns the number of neurons removed that were under the index of the removed neuron (including itself).
     /// This will also deal with hanging neurons iteratively to avoid recursion that
     /// can invalidate stored indices during nested deletions.
-    pub fn remove_neuron(&mut self, loc: NeuronLocation) {
+    pub fn remove_neuron(&mut self, loc: NeuronLocation) -> usize {
         if !loc.is_hidden() {
             panic!("cannot remove neurons in input or output layer");
         }
 
+        let initial_i = loc.unwrap();
+
         let mut work = VecDeque::new();
         work.push_back(loc);
 
+        let mut removed = 0;
         while let Some(cur_loc) = work.pop_front() {
             // if the neuron was already removed due to earlier deletions, skip.
             // i don't think it realistically should ever happen, but just in case.
@@ -454,9 +459,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             let i = cur_loc.unwrap();
             if i < self.hidden_layers.len() {
                 self.hidden_layers.remove(i);
+                if i <= initial_i {
+                    removed += 1;
+                }
                 self.downshift_connections(i, &mut work); // O(n^2) bad, but we can optimize later if it's a problem.
             }
         }
+
+        removed
     }
 
     fn downshift_connections(&mut self, i: usize, work: &mut VecDeque<NeuronLocation>) {
@@ -559,11 +569,58 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Iterates over the network and removes any hanging neurons in the hidden layer(s).
     pub fn prune_hanging_neurons(&mut self) {
-        for i in 0..self.hidden_layers.len() {
+        let mut i = 0;
+        while i < self.hidden_layers.len() {
+            let mut new_i = i + 1;
             if self.hidden_layers[i].input_count == 0 {
-                self.remove_neuron(NeuronLocation::Hidden(i));
+                // this saturating_sub is a code smell but it works and avoids some edge cases where indices can get messed up.
+                new_i = new_i.saturating_sub(self.remove_neuron(NeuronLocation::Hidden(i)));
+            }
+            i = new_i;
+        }
+    }
+
+    /// Uses DFS to find and remove all cycles in O(n+e) time.
+    /// Expects [`prune_hanging_neurons`][NeuralNetwork::prune_hanging_neurons] to be called afterwards
+    pub fn remove_cycles(&mut self) {
+        let mut visited = HashMap::new();
+
+        for i in 0..I {
+            self.remove_cycles_dfs(&mut visited, None, NeuronLocation::Input(i));
+        }
+
+        // unattached cycles (will cause problems since they
+        // never get deleted by input_count == 0)
+        for i in 0..self.hidden_layers.len() {
+            let loc = NeuronLocation::Hidden(i);
+            if !visited.contains_key(&loc) {
+                self.remove_cycles_dfs(&mut visited, None, loc);
             }
         }
+    }
+
+    // colored dfs
+    fn remove_cycles_dfs(&mut self, visited: &mut HashMap<NeuronLocation, u8>, prev: Option<NeuronLocation>, current: NeuronLocation) {
+        if let Some(&existing) = visited.get(&current) {
+            if existing == 0 {
+                // part of current dfs
+                // prev must exist here since visited would be empty on first call.
+                // only doing raw here since we recalculate input counts and prune hanging neurons later.
+                self.remove_connection_raw(Connection { from: prev.unwrap(), to: current });
+            }
+
+            // already fully visited, no need to check again
+            return;
+        }
+        
+        visited.insert(current, 0);
+        
+        let outputs = self.get_neuron(current).outputs.keys().cloned().collect::<Vec<_>>();
+        for loc in outputs {
+            self.remove_cycles_dfs(visited, Some(current), loc);
+        }
+
+        visited.insert(current, 1);
     }
 }
 
@@ -734,8 +791,8 @@ impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
         }
 
         // resolve invariants
+        child.remove_cycles();
         child.reset_input_counts();
-        // TODO cycle invariant
         child.prune_hanging_neurons();
 
         for _ in 0..settings.repr.mutation_passes {

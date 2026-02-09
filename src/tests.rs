@@ -273,6 +273,8 @@ fn remove_connection() {
     });
 }
 
+// TODO remove_neuron test
+
 const NUM_MUTATIONS: usize = 50;
 const MUTATION_RATE: f32 = 0.25;
 #[test]
@@ -286,6 +288,30 @@ fn mutate() {
         for _ in 0..NUM_MUTATIONS {
             net.mutate(&settings, MUTATION_RATE, rng);
             assert_network_invariants(&net);
+        }
+    });
+}
+
+#[test]
+fn crossover() {
+    rng_test(|rng| {
+        let mut net1 = NeuralNetwork::<10, 10>::new(rng);
+        assert_network_invariants(&net1);
+
+        let mut net2 = NeuralNetwork::<10, 10>::new(rng);
+        assert_network_invariants(&net2);
+
+        let settings = CrossoverSettings::default();
+
+        for _ in 0..NUM_MUTATIONS {
+            let a = net1.crossover(&net2, &settings, MUTATION_RATE, rng);
+            assert_network_invariants(&a);
+            
+            let b = net2.crossover(&net1, &settings, MUTATION_RATE, rng);
+            assert_network_invariants(&b);
+            
+            net1 = a;
+            net2 = b;
         }
     });
 }

@@ -1,0 +1,4 @@
+   Compiling neat v0.5.1 (/workspaces/neat)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.78s
+     Running unittests src/lib.rs (target/debug/deps/neat-53245cf135e05518)
+   Doc-tests neat
