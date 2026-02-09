@@ -152,7 +152,9 @@ pub struct ActivationFn {
 
     /// The scope defining where the activation function can appear.
     pub scope: NeuronScope,
-    pub(crate) name: &'static str,
+
+    /// The name of the activation function, used for debugging and serialization.
+    pub name: &'static str,
 }
 
 impl ActivationFn {

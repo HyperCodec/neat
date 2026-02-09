@@ -315,3 +315,8 @@ fn crossover() {
         }
     });
 }
+
+#[cfg(feature = "serde")]
+mod serde {
+    // TODO
+}
