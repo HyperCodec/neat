@@ -1,9 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    sync::{
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-        Arc,
-    },
+    collections::{HashMap, HashSet, VecDeque}, ops::{Index, IndexMut}, sync::{
+        Arc, atomic::{AtomicBool, AtomicUsize, Ordering}
+    }
 };
 
 use atomic_float::AtomicF32;
@@ -120,7 +118,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             rayon::yield_now();
         }
 
-        let n = self.get_neuron(loc);
+        let n = &self[loc];
         let val = n.activate(cache.get(loc));
 
         n.outputs.par_iter().for_each(|(&loc2, weight)| {
@@ -130,11 +128,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Get a neuron at the specified [`NeuronLocation`].
-    pub fn get_neuron(&self, loc: NeuronLocation) -> &Neuron {
-        match loc {
-            NeuronLocation::Input(i) => &self.input_layer[i],
-            NeuronLocation::Hidden(i) => &self.hidden_layers[i],
-            NeuronLocation::Output(i) => &self.output_layer[i],
+    pub fn get_neuron(&self, loc: NeuronLocation) -> Option<&Neuron> {
+        if !self.neuron_exists(loc) {
+            None
+        } else {
+            Some(&self[loc])
         }
     }
 
@@ -148,11 +146,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Get a mutable reference to the neuron at the specified [`NeuronLocation`].
-    pub fn get_neuron_mut(&mut self, loc: NeuronLocation) -> &mut Neuron {
-        match loc {
-            NeuronLocation::Input(i) => &mut self.input_layer[i],
-            NeuronLocation::Hidden(i) => &mut self.hidden_layers[i],
-            NeuronLocation::Output(i) => &mut self.output_layer[i],
+    pub fn get_neuron_mut(&mut self, loc: NeuronLocation) -> Option<&mut Neuron> {
+        if !self.neuron_exists(loc) {
+            None
+        } else {
+            Some(&mut self[loc])
         }
     }
 
@@ -177,7 +175,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 continue;
             }
 
-            let n = self.get_neuron_mut(loc);
+            let n = &mut self[loc];
             n.input_count += 1;
         }
 
@@ -190,7 +188,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
         let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
 
-        let a = self.get_neuron_mut(connection.from);
+        let a = &mut self[connection.from];
         let w = a
             .outputs
             .remove(&connection.to)
@@ -207,10 +205,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Adds a connection but does not check for cyclic linkages.
     pub fn add_connection_unchecked(&mut self, connection: Connection, weight: f32) {
-        let a = self.get_neuron_mut(connection.from);
+        let a = &mut self[connection.from];
         a.outputs.insert(connection.to, weight);
 
-        let b = self.get_neuron_mut(connection.to);
+        let b = &mut self[connection.to];
         b.input_count += 1;
     }
 
@@ -220,8 +218,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         if connection.from.is_output()
             || connection.to.is_input()
             || (self.neuron_exists(connection.from)
-                && self
-                    .get_neuron(connection.from)
+                && self[connection.from]
                     .outputs
                     .contains_key(&connection.to))
         {
@@ -236,7 +233,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             return false;
         }
 
-        let n = self.get_neuron(current);
+        let n = &self[current];
         for (loc, _) in &n.outputs {
             if !self.dfs(visited, *loc) {
                 return false;
@@ -289,7 +286,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     ) -> Option<Connection> {
         for _ in 0..max_retries {
             let a = self.random_location_in_scope(rng, !NeuronScope::OUTPUT);
-            let an = self.get_neuron(a);
+            let an = &self[a];
             if an.outputs.is_empty() {
                 continue;
             }
@@ -327,7 +324,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
     /// Mutates a connection's weight.
     pub fn mutate_weight(&mut self, connection: Connection, amount: f32, rng: &mut impl Rng) {
-        let n = self.get_neuron_mut(connection.from);
+        let n = &mut self[connection.from];
         n.mutate_weight(connection.to, amount, rng).unwrap();
     }
 
@@ -379,12 +376,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns `true` if the destination neuron has input_count == 0 and should be removed.
     /// Callers must handle the removal of the destination neuron if needed.
     pub fn remove_connection_raw(&mut self, connection: Connection) -> bool {
-        let a = self.get_neuron_mut(connection.from);
+        let a = &mut self[connection.from];
         if a.outputs.remove(&connection.to).is_none() {
             panic!("invalid connection");
         }
 
-        let b = self.get_neuron_mut(connection.to);
+        let b = &mut self[connection.to];
 
         // if the invariants held at the beginning of the call,
         // this should never underflow, but some cases like remove_cycles
@@ -431,7 +428,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             }
 
             let outputs = {
-                let n = self.get_neuron(cur_loc);
+                let n = &self[cur_loc];
                 n.outputs.keys().cloned().collect::<Vec<_>>()
             };
 
@@ -539,18 +536,18 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     fn reset_inputs_for_neuron(&mut self, loc: NeuronLocation) {
-        let outputs = self.get_neuron(loc).outputs.keys().cloned().collect::<Vec<_>>();
+        let outputs = self[loc].outputs.keys().cloned().collect::<Vec<_>>();
         let outputs2 = outputs.into_iter().filter(|&loc| {
             if !self.neuron_exists(loc) {
                 return false;
             }
 
-            let target = self.get_neuron_mut(loc);
+            let target = &mut self[loc];
             target.input_count += 1;
             true
         }).collect::<HashSet<_>>();
 
-        self.get_neuron_mut(loc).outputs.retain(|loc, _| outputs2.contains(loc));
+        self[loc].outputs.retain(|loc, _| outputs2.contains(loc));
     }
 
     fn clear_input_counts(&mut self) {
@@ -613,7 +610,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         
         visited.insert(current, 0);
         
-        let outputs = self.get_neuron(current).outputs.keys().cloned().collect::<Vec<_>>();
+        let outputs = self[current].outputs.keys().cloned().collect::<Vec<_>>();
         for loc in outputs {
             self.remove_cycles_dfs(visited, Some(current), loc);
         }
@@ -665,6 +662,28 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             let amount = rng.random_range(-max_amount..max_amount);
             *w += amount;
         });
+    }
+}
+
+impl<const I: usize, const O: usize> Index<NeuronLocation> for NeuralNetwork<I, O> {
+    type Output = Neuron;
+
+    fn index(&self, loc: NeuronLocation) -> &Self::Output {
+        match loc {
+            NeuronLocation::Input(i) => &self.input_layer[i],
+            NeuronLocation::Hidden(i) => &self.hidden_layers[i],
+            NeuronLocation::Output(i) => &self.output_layer[i],
+        }
+    }
+}
+
+impl<const I: usize, const O: usize> IndexMut<NeuronLocation> for NeuralNetwork<I, O> {
+    fn index_mut(&mut self, loc: NeuronLocation) -> &mut Self::Output {
+        match loc {
+            NeuronLocation::Input(i) => &mut self.input_layer[i],
+            NeuronLocation::Hidden(i) => &mut self.hidden_layers[i],
+            NeuronLocation::Output(i) => &mut self.output_layer[i],
+        }
     }
 }
 

@@ -40,7 +40,7 @@ fn dfs<const I: usize, const O: usize>(
 
     visited.insert(loc, GraphCheckState::CurrentCycle);
 
-    for loc2 in net.get_neuron(loc).outputs.keys() {
+    for loc2 in net[loc].outputs.keys() {
         dfs(net, *loc2, visited);
     }
 
@@ -71,7 +71,7 @@ fn assert_cache_consistency<const I: usize, const O: usize>(net: &NeuralNetwork<
     };
 
     for i in 0..I {
-        let n = net.get_neuron(NeuronLocation::Input(i));
+        let n = &net[NeuronLocation::Input(i)];
         for loc in n.outputs.keys() {
             cache.tally(*loc);
         }
