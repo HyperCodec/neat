@@ -205,12 +205,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.hidden_layers.push(new_n);
     }
 
-    /// Changes a neuron's activation function to a random one in its scope.
-    pub fn mutate_activation(&mut self, loc: NeuronLocation, rng: &mut impl Rng) {
-        let reg = ACTIVATION_REGISTRY.read().unwrap();
-        self.get_neuron_mut(loc).activation_fn = reg.random_activation_in_scope(loc.into(), rng);
-    }
-
     /// Adds a connection but does not check for cyclic linkages.
     pub fn add_connection_unchecked(&mut self, connection: Connection, weight: f32) {
         let a = self.get_neuron_mut(connection.from);
@@ -484,15 +478,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         });
     }
 
-    // TODO maybe pass Connection info.
     /// Runs the `callback` on the weights of the neural network in parallel, allowing it to modify weight values.
-    pub fn mutate_weights(&mut self, callback: impl Fn(&mut f32) + Sync) {
+    pub fn update_weights(&mut self, callback: impl Fn(&NeuronLocation, &mut f32) + Sync) {
         for n in &mut self.input_layer {
-            n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
+            n.outputs.par_iter_mut().for_each(|(loc, w)| callback(loc, w));
         }
 
         for n in &mut self.hidden_layers {
-            n.outputs.par_iter_mut().for_each(|(_, w)| callback(w));
+            n.outputs.par_iter_mut().for_each(|(loc, w)| callback(loc, w));
         }
     }
 
@@ -506,6 +499,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Mutates the activation functions of the neurons in the neural network.
     pub fn mutate_activations(&mut self, rate: f32) {
         let reg = ACTIVATION_REGISTRY.read().unwrap();
+        self.mutate_activations_with_reg(rate, &reg);
+    }
+
+    /// Mutates the activation functions of the neurons in the neural network, using a provided registry.
+    pub fn mutate_activations_with_reg(&mut self, rate: f32, reg: &ActivationRegistry) {
         self.input_layer.par_iter_mut().for_each(|n| {
             let mut rng = rand::rng();
             if rng.random_bool(rate as f64) {
@@ -622,6 +620,52 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         visited.insert(current, 1);
     }
+
+    /// Performs just the mutations that modify the graph structure of the neural network,
+    /// and not the internal mutations that only modify values such as activation functions, weights, and biases.
+    pub fn perform_graph_mutations(&mut self, settings: &MutationSettings, rate: f32, rng: &mut impl rand::Rng) {
+        // TODO maybe allow specifying probability
+        // for each type of mutation
+        if rng.random_bool(rate as f64) {
+            // split connection
+            if let Some(conn) = self.get_random_connection(settings.max_split_retries, rng) {
+                self.split_connection(conn, rng);
+            }
+        }
+
+        if rng.random_bool(rate as f64) {
+            // add connection
+            self.add_random_connection(settings.max_add_retries, rng);
+        }
+
+        if rng.random_bool(rate as f64) {
+            // remove connection
+            self.remove_random_connection(settings.max_remove_retries, rng);
+        }
+    }
+
+    /// Performs just the mutations that modify internal values such as activation functions, weights, and biases,
+    /// and not the graph mutations that modify the structure of the neural network.
+    pub fn perform_internal_mutations(&mut self, settings: &MutationSettings, rate: f32) {
+        self.mutate_activations(rate);
+        self.mutate_weights(settings.weight_mutation_amount);
+    }
+
+    /// Same as [`mutate`][NeuralNetwork::mutate] but allows specifying a custom activation registry for activation mutations.
+    pub fn mutate_with_reg(&mut self, settings: &MutationSettings, rate: f32, rng: &mut impl rand::Rng, reg: &ActivationRegistry) {
+        self.perform_graph_mutations(settings, rate, rng);
+        self.mutate_activations_with_reg(rate, reg);
+        self.mutate_weights(settings.weight_mutation_amount);
+    }
+
+    /// Mutates all weights by a random amount up to `max_amount` in either direction.
+    pub fn mutate_weights(&mut self, max_amount: f32) {
+        self.update_weights(|_, w| {
+            let mut rng = rand::rng();
+            let amount = rng.random_range(-max_amount..max_amount);
+            *w += amount;
+        });
+    }
 }
 
 /// The mutation settings for [`NeuralNetwork`].
@@ -665,39 +709,8 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
     type Context = MutationSettings;
 
     fn mutate(&mut self, settings: &MutationSettings, rate: f32, rng: &mut impl Rng) {
-        // TODO maybe allow specifying probability
-        // for each type of mutation
-
-        // graph mutations
-        if rng.random::<f32>() <= rate {
-            // split connection
-            // TODO add a setting for max_retries
-            if let Some(conn) = self.get_random_connection(settings.max_split_retries, rng) {
-                self.split_connection(conn, rng);
-            }
-        }
-
-        if rng.random::<f32>() <= rate {
-            // add connection
-            self.add_random_connection(settings.max_add_retries, rng);
-        }
-
-        if rng.random::<f32>() <= rate {
-            // remove connection
-            self.remove_random_connection(settings.max_remove_retries, rng);
-        }
-
-        // internal mutations
-        self.mutate_activations(rate);
-
-        self.mutate_weights(|w| {
-            let mut rng = rand::rng();
-
-            if rng.random::<f32>() <= rate {
-                let amount = settings.weight_mutation_amount;
-                *w += rng.random_range(-amount..amount);
-            }
-        });
+        let reg = ACTIVATION_REGISTRY.read().unwrap();
+        self.mutate_with_reg(settings, rate, rng, &reg);
     }
 }
 
