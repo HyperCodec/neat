@@ -1,3 +1,3 @@
 fn main() {
-    todo!("use NeuralNetwork as the entire DNA");
+    todo!("use NeuralNetwork as the entire genome");
 }
