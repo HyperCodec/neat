@@ -170,7 +170,7 @@ impl ActivationFn {
 
 impl fmt::Debug for ActivationFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -197,7 +197,7 @@ impl<'a> Deserialize<'a> for ActivationFn {
 
         let reg = ACTIVATION_REGISTRY.read().unwrap();
 
-        let f = reg.fns.get(&name);
+        let f = reg.fns.get(name.as_str());
 
         if f.is_none() {
             panic!("Activation function {name} not found");

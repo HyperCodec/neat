@@ -17,10 +17,32 @@ use crate::{
 use rayon::prelude::*;
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "serde")]
 use serde_big_array::BigArray;
+
+#[cfg(feature = "serde")]
+mod outputs_serde {
+    use super::*;
+    use std::collections::HashMap;
+
+    pub fn serialize<S>(map: &HashMap<NeuronLocation, f32>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let vec: Vec<(NeuronLocation, f32)> = map.iter().map(|(k, v)| (*k, *v)).collect();
+        vec.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<NeuronLocation, f32>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let vec: Vec<(NeuronLocation, f32)> = Vec::deserialize(deserializer)?;
+        Ok(vec.into_iter().collect())
+    }
+}
 
 /// An abstract neural network type with `I` input neurons and `O` output neurons.
 /// Hidden neurons are not organized into layers, but rather float and link freely
@@ -863,6 +885,7 @@ pub struct Neuron {
     pub input_count: usize,
 
     /// The connections and weights to other neurons.
+    #[cfg_attr(feature = "serde", serde(with = "outputs_serde"))]
     pub outputs: HashMap<NeuronLocation, f32>,
 
     /// The initial value of the neuron.

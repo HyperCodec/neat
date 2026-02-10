@@ -318,5 +318,22 @@ fn crossover() {
 
 #[cfg(feature = "serde")]
 mod serde {
-    // TODO
+    use crate::*;
+    use super::rng_test;
+
+    #[test]
+    fn full_serde() {
+        rng_test(|rng| {
+            let net1 = NeuralNetwork::<10, 10>::new(rng);
+
+            let mut buf = Vec::new();
+            let writer = std::io::Cursor::new(&mut buf);
+            let mut serializer = serde_json::Serializer::new(writer);
+
+            serde_path_to_error::serialize(&net1, &mut serializer).unwrap();
+            let serialized = serde_json::to_string(&net1).unwrap();
+            let net2: NeuralNetwork<10, 10> = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(net1, net2);
+        });
+    }
 }
