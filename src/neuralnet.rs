@@ -83,7 +83,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for _ in 0..I {
             let mut already_chosen = HashSet::new();
             let num_outputs = rng.random_range(1..=O);
-            let mut outputs = HashMap::with_capacity(num_outputs);
+            let mut outputs = HashMap::new();
 
             for _ in 0..num_outputs {
                 let mut j = rng.random_range(0..O);
@@ -246,6 +246,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn is_connection_safe(&self, connection: Connection) -> bool {
         if connection.from.is_output()
             || connection.to.is_input()
+            || connection.from == connection.to
             || (self.neuron_exists(connection.from)
                 && self[connection.from]
                     .outputs
@@ -608,9 +609,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Expects [`prune_hanging_neurons`][NeuralNetwork::prune_hanging_neurons] to be called afterwards
     pub fn remove_cycles(&mut self) {
         let mut visited = HashMap::new();
+        let mut edges_to_remove: HashSet<Connection> = HashSet::new();
 
         for i in 0..I {
-            self.remove_cycles_dfs(&mut visited, None, NeuronLocation::Input(i));
+            self.remove_cycles_dfs(&mut visited, &mut edges_to_remove, None, NeuronLocation::Input(i));
         }
 
         // unattached cycles (will cause problems since they
@@ -618,19 +620,33 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for i in 0..self.hidden_layers.len() {
             let loc = NeuronLocation::Hidden(i);
             if !visited.contains_key(&loc) {
-                self.remove_cycles_dfs(&mut visited, None, loc);
+                self.remove_cycles_dfs(&mut visited, &mut edges_to_remove, None, loc);
             }
+        }
+
+        for conn in edges_to_remove {
+            // only doing raw here since we recalculate input counts and
+            // prune hanging neurons later.
+            self.remove_connection_raw(conn);
         }
     }
 
     // colored dfs
-    fn remove_cycles_dfs(&mut self, visited: &mut HashMap<NeuronLocation, u8>, prev: Option<NeuronLocation>, current: NeuronLocation) {
+    fn remove_cycles_dfs(
+        &mut self,
+        visited: &mut HashMap<NeuronLocation, u8>,
+        edges_to_remove: &mut HashSet<Connection>,
+        prev: Option<NeuronLocation>,
+        current: NeuronLocation,
+    ) {
         if let Some(&existing) = visited.get(&current) {
             if existing == 0 {
-                // part of current dfs
+                // part of current dfs - found a cycle
                 // prev must exist here since visited would be empty on first call.
-                // only doing raw here since we recalculate input counts and prune hanging neurons later.
-                self.remove_connection_raw(Connection { from: prev.unwrap(), to: current });
+                let prev = prev.unwrap();
+                if self[prev].outputs.contains_key(&current) {
+                    edges_to_remove.insert(Connection { from: prev, to: current });
+                }
             }
 
             // already fully visited, no need to check again
@@ -641,7 +657,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         
         let outputs = self[current].outputs.keys().cloned().collect::<Vec<_>>();
         for loc in outputs {
-            self.remove_cycles_dfs(visited, Some(current), loc);
+            self.remove_cycles_dfs(visited, edges_to_remove, Some(current), loc);
         }
 
         visited.insert(current, 1);
@@ -880,7 +896,7 @@ fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> b
 
 /// A helper struct for operations on connections between neurons.
 /// It does not contain information about the weight.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Connection {
     /// The source of the connection.
@@ -1011,7 +1027,7 @@ impl Neuron {
 }
 
 /// A pseudo-pointer of sorts that is used for caching.
-#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Hash, Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NeuronLocation {
     /// Points to a neuron in the input layer at contained index.
