@@ -1,7 +1,7 @@
 use neat::*;
 
 // approximate the to_degrees function, which should be pretty
-// hard for the network to learn since it's not really close to -1..1 mapping.
+// hard for a traditional network to learn since it's not really close to -1..1 mapping.
 fn fitness(net: &NeuralNetwork<1, 1>) -> f32 {
     let mut rng = rand::rng();
     let mut total_fitness = 0.0;
@@ -12,7 +12,9 @@ fn fitness(net: &NeuralNetwork<1, 1>) -> f32 {
         let output = net.predict([input])[0];
         let expected_output = input.to_degrees();
 
-        // basically just using negative error as fitness
+        // basically just using negative error as fitness.
+        // percentage error doesn't work as well here since
+        // expected_output can be either very small or very large in magnitude.
         total_fitness -= (output - expected_output).abs();
     }
 
@@ -33,8 +35,8 @@ fn main() {
 
         // sample a genome to print its fitness.
         // this value should approach 0 as the generations go on, since the fitness is negative error.
-        // because of hte way CrossoverEliminator works internally, the parent genomes (i.e. prev generation champs)
-        // are more likely to be at the start of the genomes vector.
+        // with the way CrossoverRepopulator (and all builtin repopulators) works internally, the parent genomes
+        // (i.e. prev generation champs) are more likely to be at the start of the genomes vector.
         let sample = &sim.genomes[0];
         let fit = fitness(sample);
         println!("Gen {i} sample fitness: {fit}");
