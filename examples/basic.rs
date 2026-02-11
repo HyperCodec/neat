@@ -30,7 +30,7 @@ fn main() {
         CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
     );
 
-    for i in 0..=200 {
+    for i in 0..=150 {
         sim.next_generation();
 
         // sample a genome to print its fitness.
@@ -45,7 +45,7 @@ fn main() {
 
     let net = &sim.genomes[0];
     println!("Network in use: {:#?}", net);
-    
+
     loop {
         let mut input_text = String::new();
         println!("Enter a number to convert to degrees (or 'exit' to quit): ");
@@ -66,7 +66,9 @@ fn main() {
         let expected_output = input.to_degrees();
         println!(
             "Network output: {}, Expected output: {}, Error: {}",
-            output, expected_output, (output - expected_output).abs()
+            output,
+            expected_output,
+            (output - expected_output).abs()
         );
     }
 }

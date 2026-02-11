@@ -306,10 +306,10 @@ fn crossover() {
         for _ in 0..NUM_MUTATIONS {
             let a = net1.crossover(&net2, &settings, MUTATION_RATE, rng);
             assert_network_invariants(&a);
-            
+
             let b = net2.crossover(&net1, &settings, MUTATION_RATE, rng);
             assert_network_invariants(&b);
-            
+
             net1 = a;
             net2 = b;
         }
@@ -318,8 +318,8 @@ fn crossover() {
 
 #[cfg(feature = "serde")]
 mod serde {
-    use crate::*;
     use super::rng_test;
+    use crate::*;
 
     #[test]
     fn full_serde() {
