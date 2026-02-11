@@ -123,7 +123,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             .into_par_iter()
             .for_each(|i| self.eval(NeuronLocation::Input(i), cache.clone()));
 
-        cache.output()
+        let mut outputs = [0.0; O];
+        for i in 0..O {
+            let n = &self.output_layer[i];
+            let val = cache.get(NeuronLocation::Output(i));
+            outputs[i] = n.activate(val);
+        }
+
+        outputs
     }
 
     fn eval(&self, loc: NeuronLocation, cache: Arc<NeuralNetCache<I, O>>) {
@@ -398,9 +405,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns `true` if the destination neuron has input_count == 0 and should be removed.
     /// Callers must handle the removal of the destination neuron if needed.
     pub fn remove_connection_raw(&mut self, connection: Connection) -> bool {
-        let a = &mut self[connection.from];
+        let a = self.get_neuron_mut(connection.from).expect("invalid connection.from");
         if a.outputs.remove(&connection.to).is_none() {
-            panic!("invalid connection");
+            panic!("invalid connection.to");
         }
 
         let b = &mut self[connection.to];
@@ -696,6 +703,12 @@ impl<const I: usize, const O: usize> Index<NeuronLocation> for NeuralNetwork<I, 
             NeuronLocation::Hidden(i) => &self.hidden_layers[i],
             NeuronLocation::Output(i) => &self.output_layer[i],
         }
+    }
+}
+
+impl<const I: usize, const O: usize> GenerateRandom for NeuralNetwork<I, O> {
+    fn gen_random(rng: &mut impl rand::Rng) -> Self {
+        Self::new(rng)
     }
 }
 
@@ -1107,11 +1120,11 @@ pub struct NeuralNetCache<const I: usize, const O: usize> {
 
 impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
     /// Gets the value of a neuron at the given location.
-    pub fn get(&self, loc: impl AsRef<NeuronLocation>) -> f32 {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => self.input_layer[*i].value.load(Ordering::SeqCst),
-            NeuronLocation::Hidden(i) => self.hidden_layers[*i].value.load(Ordering::SeqCst),
-            NeuronLocation::Output(i) => self.output_layer[*i].value.load(Ordering::SeqCst),
+    pub fn get(&self, loc: NeuronLocation) -> f32 {
+        match loc {
+            NeuronLocation::Input(i) => self.input_layer[i].value.load(Ordering::SeqCst),
+            NeuronLocation::Hidden(i) => self.hidden_layers[i].value.load(Ordering::SeqCst),
+            NeuronLocation::Output(i) => self.output_layer[i].value.load(Ordering::SeqCst),
         }
     }
 
@@ -1159,17 +1172,6 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         }
     }
 
-    /// Fetches and packs the output layer values into an array.
-    pub fn output(&self) -> [f32; O] {
-        let output: Vec<_> = self
-            .output_layer
-            .par_iter()
-            .map(|c| c.value.load(Ordering::SeqCst))
-            .collect();
-
-        output.try_into().unwrap()
-    }
-
     /// Attempts to claim a neuron. Returns false if it has already been claimed.
     pub fn claim(&self, loc: impl AsRef<NeuronLocation>) -> bool {
         match loc.as_ref() {
@@ -1204,5 +1206,27 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
             hidden_layers,
             output_layer,
         }
+    }
+}
+
+/// A trait for getting the index of the maximum element.
+pub trait MaxIndex {
+    /// Returns the index of the maximum element.
+    fn max_index(self) -> usize;
+}
+
+impl<'a, T: PartialOrd + 'a, I: Iterator<Item = &'a T>> MaxIndex for I {
+    fn max_index(self) -> usize {
+        let mut max_i = 0;
+        let mut max_v = None;
+
+        for (i, v) in self.enumerate() {
+            if max_v.is_none() || v > max_v.unwrap() {
+                max_i = i;
+                max_v = Some(v);
+            }
+        }
+
+        max_i
     }
 }
