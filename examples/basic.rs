@@ -65,8 +65,8 @@ fn main() {
         let output = net.predict([input])[0];
         let expected_output = input.to_degrees();
         println!(
-            "Network output: {}, Expected output: {}",
-            output, expected_output
+            "Network output: {}, Expected output: {}, Error: {}",
+            output, expected_output, (output - expected_output).abs()
         );
     }
 }
