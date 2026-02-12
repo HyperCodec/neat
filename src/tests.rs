@@ -301,7 +301,7 @@ fn crossover() {
         let mut net2 = NeuralNetwork::<10, 10>::new(rng);
         assert_network_invariants(&net2);
 
-        let settings = CrossoverSettings::default();
+        let settings = ReproductionSettings::default();
 
         for _ in 0..NUM_MUTATIONS {
             let a = net1.crossover(&net2, &settings, MUTATION_RATE, rng);

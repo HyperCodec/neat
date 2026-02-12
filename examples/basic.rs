@@ -27,7 +27,7 @@ fn main() {
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 250),
         FitnessEliminator::new_with_default(fitness),
-        CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
+        CrossoverRepopulator::new(0.25, ReproductionSettings::default()),
     );
 
     for i in 0..=150 {

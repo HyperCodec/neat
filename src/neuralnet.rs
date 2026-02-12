@@ -8,6 +8,7 @@ use std::{
 };
 
 use atomic_float::AtomicF32;
+use bitflags::bitflags;
 use genetic_rs::prelude::*;
 use rand::Rng;
 use replace_with::replace_with_or_abort;
@@ -694,19 +695,19 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     ) {
         // TODO maybe allow specifying probability
         // for each type of mutation
-        if rng.random_bool(rate as f64) {
+        if settings.allowed_mutations.contains(GraphMutations::SPLIT_CONNECTION) && rng.random_bool(rate as f64) {
             // split connection
             if let Some(conn) = self.get_random_connection(settings.max_split_retries, rng) {
                 self.split_connection(conn, rng);
             }
         }
 
-        if rng.random_bool(rate as f64) {
+        if settings.allowed_mutations.contains(GraphMutations::ADD_CONNECTION) && rng.random_bool(rate as f64) {
             // add connection
             self.add_random_connection(settings.max_add_retries, rng);
         }
 
-        if rng.random_bool(rate as f64) {
+        if settings.allowed_mutations.contains(GraphMutations::REMOVE_CONNECTION) && rng.random_bool(rate as f64) {
             // remove connection
             self.remove_random_connection(settings.max_remove_retries, rng);
         }
@@ -792,6 +793,11 @@ pub struct MutationSettings {
 
     /// The maximum number of retries for splitting connections.
     pub max_split_retries: usize,
+
+    /// The types of graph mutations to allow during mutation.
+    /// Graph mutations are mutations that modify the structure of the neural network,
+    /// such as adding/removing connections and adding neurons.
+    pub allowed_mutations: GraphMutations,
 }
 
 impl Default for MutationSettings {
@@ -803,7 +809,49 @@ impl Default for MutationSettings {
             max_add_retries: 10,
             max_remove_retries: 10,
             max_split_retries: 10,
+            allowed_mutations: GraphMutations::default(),
         }
+    }
+}
+
+bitflags! {
+    /// The types of graph mutations to allow during mutation.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct GraphMutations: u8 {
+        /// Mutation that splits an existing connection into two via a hidden neuron.
+        const SPLIT_CONNECTION = 0b00000001;
+        /// Mutation that adds a new connection between neurons.
+        const ADD_CONNECTION = 0b00000010;
+        /// Mutation that removes an existing connection.
+        const REMOVE_CONNECTION = 0b00000100;
+    }
+}
+
+impl Default for GraphMutations {
+    fn default() -> Self {
+        Self::all()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl Serialize for GraphMutations {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.bits().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for GraphMutations {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let bits = u8::deserialize(deserializer)?;
+        GraphMutations::from_bits(bits)
+            .ok_or_else(|| serde::de::Error::custom("invalid bit pattern for GraphMutations"))
     }
 }
 
@@ -854,21 +902,13 @@ impl<const I: usize, const O: usize> Mitosis for NeuralNetwork<I, O> {
     }
 }
 
-/// The settings used for [`NeuralNetwork`] crossover.
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct CrossoverSettings {
-    /// The reproduction settings to use during crossover, which will be applied to the child after crossover.
-    pub repr: ReproductionSettings,
-    // TODO other crossover settings.
-}
-
 impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
-    type Context = CrossoverSettings;
+    type Context = ReproductionSettings;
 
     fn crossover(
         &self,
         other: &Self,
-        settings: &CrossoverSettings,
+        settings: &ReproductionSettings,
         rate: f32,
         rng: &mut impl rand::Rng,
     ) -> Self {
@@ -920,8 +960,8 @@ impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
         child.reset_input_counts();
         child.prune_hanging_neurons();
 
-        for _ in 0..settings.repr.mutation_passes {
-            child.mutate(&settings.repr.mutation, rate, rng);
+        for _ in 0..settings.mutation_passes {
+            child.mutate(&settings.mutation, rate, rng);
         }
 
         child

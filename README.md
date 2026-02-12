@@ -33,7 +33,7 @@ fn main() {
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 100),
         FitnessEliminator::new_with_default(fitness),
-        CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
+        CrossoverRepopulator::new(0.25, ReproductionSettings::default()),
     );
 
     sim.perform_generations(100);
@@ -61,6 +61,15 @@ struct MyGenome {
     stats: PhysicalStats,
 }
 
+impl Default for MyGenomeCtx {
+    fn default() -> Self {
+        Self {
+            brain: ReproductionSettings::default(),
+            stats: PhysicalStats::default(),
+        }
+    }
+}
+
 fn fitness(genome: &MyGenome) -> f32 {
     let inputs = [1.0, 2.0, 3.0, 4.0];
     let outputs = genome.brain.predict(inputs);
@@ -74,7 +83,7 @@ fn main() {
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 100),
         FitnessEliminator::new_with_default(fitness),
-        CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
+        CrossoverRepopulator::new(0.25, MyGenomeCtx::default()),
     );
 
     sim.perform_generations(100);
