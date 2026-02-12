@@ -27,6 +27,11 @@ name = "extra_genes"
 path = "examples/extra_genes.rs"
 required-features = ["genetic-rs/derive"]
 
+[[example]]
+name = "serde"
+path = "examples/serde.rs"
+required-features = ["serde"]
+
 [features]
 default = []
 serde = ["dep:serde", "dep:serde-big-array"]

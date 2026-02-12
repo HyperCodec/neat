@@ -103,7 +103,9 @@ impl PhysicalStats {
         self.speed = self.speed.clamp(SPEED_MIN, SPEED_MAX);
         self.strength = self.strength.clamp(STRENGTH_MIN, STRENGTH_MAX);
         self.sense_range = self.sense_range.clamp(SENSE_RANGE_MIN, SENSE_RANGE_MAX);
-        self.energy_capacity = self.energy_capacity.clamp(ENERGY_CAPACITY_MIN, ENERGY_CAPACITY_MAX);
+        self.energy_capacity = self
+            .energy_capacity
+            .clamp(ENERGY_CAPACITY_MIN, ENERGY_CAPACITY_MAX);
     }
 }
 
@@ -134,7 +136,8 @@ impl RandomlyMutable for PhysicalStats {
             self.sense_range += rng.random_range(-context.sense_range..context.sense_range);
         }
         if rng.random::<f32>() < context.capacity_prob {
-            self.energy_capacity += rng.random_range(-context.capacity_range..context.capacity_range);
+            self.energy_capacity +=
+                rng.random_range(-context.capacity_range..context.capacity_range);
         }
         self.clamp();
     }
@@ -151,8 +154,10 @@ impl Crossover for PhysicalStats {
         rng: &mut impl rand::Rng,
     ) -> Self {
         let mut child = PhysicalStats {
-            speed: (self.speed + other.speed) / 2.0 + rng.random_range(-context.speed_range..context.speed_range),
-            strength: (self.strength + other.strength) / 2.0 + rng.random_range(-context.strength_range..context.strength_range),
+            speed: (self.speed + other.speed) / 2.0
+                + rng.random_range(-context.speed_range..context.speed_range),
+            strength: (self.strength + other.strength) / 2.0
+                + rng.random_range(-context.strength_range..context.strength_range),
             sense_range: (self.sense_range + other.sense_range) / 2.0
                 + rng.random_range(-context.sense_range..context.sense_range),
             energy_capacity: (self.energy_capacity + other.energy_capacity) / 2.0
@@ -171,7 +176,6 @@ struct OrganismGenome {
     brain: NeuralNetwork<8, 2>,
     stats: PhysicalStats,
 }
-
 
 /// Running instance of an organism with current position and energy
 struct OrganismInstance {
@@ -285,7 +289,8 @@ impl OrganismInstance {
             let dist = (dx * dx + dy * dy).sqrt();
             if dist < FOOD_DETECTION_DISTANCE {
                 // ate food
-                self.energy += BASE_FOOD_ENERGY + (self.genome.stats.strength * STRENGTH_ENERGY_MULTIPLIER);
+                self.energy +=
+                    BASE_FOOD_ENERGY + (self.genome.stats.strength * STRENGTH_ENERGY_MULTIPLIER);
                 self.energy = self.energy.min(self.genome.stats.energy_capacity);
                 self.food_eaten += 1;
                 false
