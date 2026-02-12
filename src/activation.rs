@@ -4,6 +4,7 @@ pub mod builtin;
 use bitflags::bitflags;
 use builtin::*;
 
+use genetic_rs::prelude::rand;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -20,11 +21,11 @@ use crate::NeuronLocation;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(std::sync::Arc::new($F), NeuronScope::default(), stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $crate::activation::NeuronScope::default(), stringify!($F).into())
     };
 
     ($F: path, $S: expr) => {
-        ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F).into())
     };
 
     {$($F: path),*} => {
@@ -56,13 +57,13 @@ pub fn batch_register_activation(acts: impl IntoIterator<Item = ActivationFn>) {
 /// A registry of the different possible activation functions.
 pub struct ActivationRegistry {
     /// The currently-registered activation functions.
-    pub fns: HashMap<String, ActivationFn>,
+    pub fns: HashMap<&'static str, ActivationFn>,
 }
 
 impl ActivationRegistry {
     /// Registers an activation function.
     pub fn register(&mut self, activation: ActivationFn) {
-        self.fns.insert(activation.name.clone(), activation);
+        self.fns.insert(activation.name, activation);
     }
 
     /// Registers multiple activation functions at once.
@@ -72,7 +73,7 @@ impl ActivationRegistry {
         }
     }
 
-    /// Gets a Vec of all the activation functions registered. Unless you need an owned value, use [fns][ActivationRegistry::fns].values() instead.
+    /// Gets a Vec of all the activation functions registered. Use [fns][ActivationRegistry::fns] if you only need an iterator.
     pub fn activations(&self) -> Vec<ActivationFn> {
         self.fns.values().cloned().collect()
     }
@@ -82,8 +83,34 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| !a.scope.contains(NeuronScope::NONE) && a.scope.contains(scope))
+            .filter(|a| a.scope.contains(scope))
             .collect()
+    }
+
+    /// Clears all existing values in the activation registry.
+    pub fn clear(&mut self) {
+        self.fns.clear();
+    }
+
+    /// Fetches a random activation fn that applies to the provided scope.
+    pub fn random_activation_in_scope(
+        &self,
+        scope: NeuronScope,
+        rng: &mut impl rand::Rng,
+    ) -> ActivationFn {
+        let mut iter = self.fns.values().cycle();
+        let num_iterations = rng.random_range(0..self.fns.len() - 1);
+
+        for _ in 0..num_iterations {
+            iter.next().unwrap();
+        }
+
+        let mut val = iter.next().unwrap();
+        while !val.scope.contains(scope) {
+            val = iter.next().unwrap();
+        }
+
+        val.clone()
     }
 }
 
@@ -125,19 +152,25 @@ pub struct ActivationFn {
 
     /// The scope defining where the activation function can appear.
     pub scope: NeuronScope,
-    pub(crate) name: String,
+
+    /// The name of the activation function, used for debugging and serialization.
+    pub name: &'static str,
 }
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
-    pub fn new(func: Arc<dyn Activation + Send + Sync>, scope: NeuronScope, name: String) -> Self {
+    pub fn new(
+        func: Arc<dyn Activation + Send + Sync>,
+        scope: NeuronScope,
+        name: &'static str,
+    ) -> Self {
         Self { func, name, scope }
     }
 }
 
 impl fmt::Debug for ActivationFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -150,7 +183,7 @@ impl PartialEq for ActivationFn {
 #[cfg(feature = "serde")]
 impl Serialize for ActivationFn {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.name)
+        serializer.serialize_str(self.name)
     }
 }
 
@@ -164,7 +197,7 @@ impl<'a> Deserialize<'a> for ActivationFn {
 
         let reg = ACTIVATION_REGISTRY.read().unwrap();
 
-        let f = reg.fns.get(&name);
+        let f = reg.fns.get(name.as_str());
 
         if f.is_none() {
             panic!("Activation function {name} not found");
