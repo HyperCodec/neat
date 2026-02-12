@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-
 #![warn(missing_docs)]
 
 /// Contains the types surrounding activation functions.
@@ -23,15 +22,9 @@ impl<T: PartialOrd, I: Iterator<Item = T>> MaxIndex for I {
         // enumerate now so we don't accidentally
         // skip the index of the first element
         let mut iter = self.enumerate();
-        
+
         let mut max_i = 0;
-
-        let first = iter.next();
-        if first.is_none() {
-            return None;
-        }
-
-        let mut max_v = first.unwrap().1;
+        let mut max_v = iter.next()?.1;
 
         for (i, v) in iter {
             if v > max_v {
