@@ -695,19 +695,31 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     ) {
         // TODO maybe allow specifying probability
         // for each type of mutation
-        if settings.allowed_mutations.contains(GraphMutations::SPLIT_CONNECTION) && rng.random_bool(rate as f64) {
+        if settings
+            .allowed_mutations
+            .contains(GraphMutations::SPLIT_CONNECTION)
+            && rng.random_bool(rate as f64)
+        {
             // split connection
             if let Some(conn) = self.get_random_connection(settings.max_split_retries, rng) {
                 self.split_connection(conn, rng);
             }
         }
 
-        if settings.allowed_mutations.contains(GraphMutations::ADD_CONNECTION) && rng.random_bool(rate as f64) {
+        if settings
+            .allowed_mutations
+            .contains(GraphMutations::ADD_CONNECTION)
+            && rng.random_bool(rate as f64)
+        {
             // add connection
             self.add_random_connection(settings.max_add_retries, rng);
         }
 
-        if settings.allowed_mutations.contains(GraphMutations::REMOVE_CONNECTION) && rng.random_bool(rate as f64) {
+        if settings
+            .allowed_mutations
+            .contains(GraphMutations::REMOVE_CONNECTION)
+            && rng.random_bool(rate as f64)
+        {
             // remove connection
             self.remove_random_connection(settings.max_remove_retries, rng);
         }
