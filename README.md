@@ -23,7 +23,9 @@ fn fitness(net: &NeuralNetwork<5, 6>) -> f32 {
     let inputs = [1.0, 2.0, 3.0, 4.0, 5.0];
     let outputs = net.predict(inputs);
 
-    todo!("test output");
+    // simple fitness: sum of outputs
+    // you should replace this with a real fitness test
+    outputs.iter().sum()
 }
 
 fn main() {
@@ -39,7 +41,7 @@ fn main() {
 ```
 
 Or just a part of a more complex genome:
-```rust
+```rust,ignore
 use neat::*;
 
 #[derive(Clone, Debug)]
@@ -60,7 +62,10 @@ struct MyGenome {
 }
 
 fn fitness(genome: &MyGenome) -> f32 {
-    todo!("test using both brain and stats");
+    let inputs = [1.0, 2.0, 3.0, 4.0];
+    let outputs = genome.brain.predict(inputs);
+    // fitness uses both brain output and stats
+    outputs.iter().sum::<f32>() + genome.stats.strength + genome.stats.speed
 }
 
 // main is the exact same as before
