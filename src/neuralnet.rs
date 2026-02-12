@@ -1266,25 +1266,3 @@ impl<const I: usize, const O: usize> From<&NeuralNetwork<I, O>> for NeuralNetCac
         }
     }
 }
-
-/// A trait for getting the index of the maximum element.
-pub trait MaxIndex {
-    /// Returns the index of the maximum element.
-    fn max_index(self) -> usize;
-}
-
-impl<'a, T: PartialOrd + 'a, I: Iterator<Item = &'a T>> MaxIndex for I {
-    fn max_index(self) -> usize {
-        let mut max_i = 0;
-        let mut max_v = None;
-
-        for (i, v) in self.enumerate() {
-            if max_v.is_none() || v > max_v.unwrap() {
-                max_i = i;
-                max_v = Some(v);
-            }
-        }
-
-        max_i
-    }
-}

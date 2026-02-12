@@ -20,7 +20,8 @@ fn main() {
         net.mutate(&MutationSettings::default(), 0.25, &mut rng);
     }
 
-    let file = std::fs::File::create(OUTPUT_PATH).expect("Failed to create file for network output");
+    let file =
+        std::fs::File::create(OUTPUT_PATH).expect("Failed to create file for network output");
     serde_json::to_writer_pretty(file, &net).expect("Failed to write network to file");
 
     println!("Network saved to {OUTPUT_PATH}");

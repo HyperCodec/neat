@@ -11,7 +11,72 @@ Implementation of the NEAT algorithm using `genetic-rs`.
 *Do you like this crate and want to support it? If so, leave a ⭐*
 
 # How To Use
-TODO
+The `NeuralNetwork<I, O>` struct is the main type exported by this crate. The `I` is the number of input neurons, and `O` is the number of output neurons. It implements `GenerateRandom`, `RandomlyMutable`, `Mitosis`, and `Crossover`, with a lot of customizability. This means that you can use it standalone as your organism's entire genome:
+```rust
+use neat::*;
+
+fn fitness(net: &NeuralNetwork<5, 6>) -> f32 {
+    // ideally you'd test multiple times for consistency,
+    // but this is just a simple example.
+    // it's also generally good to normalize your inputs between -1..1,
+    // but NEAT is usually flexible enough to still work anyways
+    let inputs = [1.0, 2.0, 3.0, 4.0, 5.0];
+    let outputs = net.predict(inputs);
+
+    todo!("test output");
+}
+
+fn main() {
+    let mut rng = rand::rng();
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(&mut rng, 100),
+        FitnessEliminator::new_with_default(fitness),
+        CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
+    );
+
+    sim.perform_generations(100);
+}
+```
+
+Or just a part of a more complex genome:
+```rust
+use neat::*;
+
+#[derive(Clone, Debug)]
+struct PhysicalStats {
+    strength: f32,
+    speed: f32,
+    // ...
+}
+
+// ... implement `RandomlyMutable`, `GenerateRandom`, `Crossover`, etc.
+
+#[derive(Clone, Debug, GenerateRandom, RandomlyMutable, Mitosis, Crossover)]
+#[randmut(create_context = MyGenomeCtx)]
+#[crossover(with_context = MyGenomeCtx)]
+struct MyGenome {
+    brain: NeuralNetwork<4, 2>,
+    stats: PhysicalStats,
+}
+
+fn fitness(genome: &MyGenome) -> f32 {
+    todo!("test using both brain and stats");
+}
+
+// main is the exact same as before
+fn main() {
+    let mut rng = rand::rng();
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(&mut rng, 100),
+        FitnessEliminator::new_with_default(fitness),
+        CrossoverRepopulator::new(0.25, CrossoverSettings::default()),
+    );
+
+    sim.perform_generations(100);
+}
+```
+
+If you want more in-depth examples, look at the [examples](https://github.com/HyperCodec/neat/tree/main/examples). You can also check out the [genetic-rs docs](https://docs.rs/genetic_rs) to see what other options you have to customize your genetic simulation.
 
 ### License
 This crate falls under the `MIT` license
