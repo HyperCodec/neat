@@ -51,7 +51,7 @@ struct PhysicalStats {
     // ...
 }
 
-// ... implement `RandomlyMutable`, `GenerateRandom`, `Crossover`, etc.
+// ... implement `RandomlyMutable`, `GenerateRandom`, `Crossover`, `Default`, etc.
 
 #[derive(Clone, Debug, GenerateRandom, RandomlyMutable, Mitosis, Crossover)]
 #[randmut(create_context = MyGenomeCtx)]
