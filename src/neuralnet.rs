@@ -1258,18 +1258,15 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
     }
 
     /// Returns whether [`finished_inputs`][NeuronCache::finished_inputs] matches [`expected_inputs`][NeuronCache::expected_inputs].
-    pub fn is_ready(&self, loc: impl AsRef<NeuronLocation>) -> bool {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => {
-                let c = &self.input_layer[*i];
-                c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
-            }
+    pub fn is_ready(&self, loc: NeuronLocation) -> bool {
+        match loc {
+            NeuronLocation::Input(_) => true, // input neurons are always ready since they don't wait for any inputs
             NeuronLocation::Hidden(i) => {
-                let c = &self.hidden_layers[*i];
+                let c = &self.hidden_layers[i];
                 c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
             }
             NeuronLocation::Output(i) => {
-                let c = &self.output_layer[*i];
+                let c = &self.output_layer[i];
                 c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
             }
         }
