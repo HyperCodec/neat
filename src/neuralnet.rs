@@ -141,17 +141,16 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     fn eval(&self, loc: NeuronLocation, cache: Arc<NeuralNetCache<I, O>>) {
-        if !cache.claim(loc) {
-            // some other thread is already
-            // waiting to do this task, currently doing it, or done.
-            // no need to do it again.
+        if !cache.is_ready(loc) {
+            // Not all inputs have arrived yet.
+            // The last upstream neuron to contribute will call eval again
+            // and find the neuron ready at that point.
             return;
         }
 
-        while !cache.is_ready(loc) {
-            // essentially spinlocks until the dependency tasks are complete,
-            // while letting this thread do some work on random tasks.
-            rayon::yield_now();
+        if !cache.claim(loc) {
+            // Another thread already evaluated or is evaluating this neuron.
+            return;
         }
 
         let n = &self[loc];
