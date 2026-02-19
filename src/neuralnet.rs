@@ -149,7 +149,15 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         if !cache.claim(loc) {
-            // Another thread already evaluated or is evaluating this neuron.
+            // `claim` is still required even though `is_ready` is checked first.
+            //
+            // There is a TOCTOU race: thread A's `is_ready` load can occur
+            // *after* thread B's `finished_inputs.fetch_add` in the SeqCst
+            // total order, even though A's own `add` completed first.  Both
+            // threads can therefore observe `is_ready = true` for the same
+            // neuron simultaneously.  Without this guard both would evaluate
+            // the neuron and double-contribute to every downstream neuron,
+            // cascading into incorrect results.
             return;
         }
 
