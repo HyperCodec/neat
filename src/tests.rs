@@ -275,6 +275,109 @@ fn remove_connection() {
 
 // TODO remove_neuron test
 
+#[test]
+fn predict_basic() {
+    // Build a minimal 1-in / 1-out network with linear activations and zero bias
+    // so the output is exactly: input * weight.
+    let weight = 0.5_f32;
+    let net = NeuralNetwork {
+        input_layer: [Neuron {
+            input_count: 0,
+            outputs: HashMap::from([(NeuronLocation::Output(0), weight)]),
+            bias: 0.0,
+            activation_fn: activation_fn!(linear_activation),
+        }],
+        hidden_layers: vec![],
+        output_layer: [Neuron {
+            input_count: 1,
+            outputs: HashMap::new(),
+            bias: 0.0,
+            activation_fn: activation_fn!(linear_activation),
+        }],
+    };
+
+    let inputs = [2.0_f32];
+    let outputs = net.predict(inputs);
+    let expected = inputs[0] * weight;
+    assert!(
+        (outputs[0] - expected).abs() < 1e-5,
+        "expected {expected}, got {}",
+        outputs[0]
+    );
+
+    // Zero input should yield zero output (no bias).
+    let outputs_zero = net.predict([0.0]);
+    assert!(
+        outputs_zero[0].abs() < 1e-5,
+        "expected 0.0, got {}",
+        outputs_zero[0]
+    );
+
+    // Stress-test with random networks using default (sigmoid) output activations.
+    // Use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
+    for seed in 0..TEST_COUNT {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let net = NeuralNetwork::<5, 5>::new(&mut rng);
+        let inputs = [0.1, 0.2, 0.3, 0.4, 0.5];
+        let outputs = net.predict(inputs);
+        // sigmoid outputs are in the open interval (0, 1)
+        for &v in &outputs {
+            assert!(v > 0.0 && v < 1.0, "sigmoid output {v} out of range (0, 1)");
+        }
+    }
+}
+
+#[test]
+fn predict_consistency() {
+    // Repeated calls with the same inputs must return results within floating-point
+    // tolerance. Exact equality is not guaranteed because the parallel atomic
+    // accumulation order may vary between runs.
+    // Use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
+    for seed in 0..TEST_COUNT {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let net = NeuralNetwork::<5, 3>::new(&mut rng);
+        let inputs = [1.0, -1.0, 0.5, 0.0, -0.5];
+        let first = net.predict(inputs);
+        for _ in 0..5 {
+            let result = net.predict(inputs);
+            for (a, b) in first.iter().zip(result.iter()) {
+                assert!(
+                    (a - b).abs() < 1e-5,
+                    "predict returned inconsistent results: {a} vs {b}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn predict_parallel_no_deadlock() {
+    // Build a network with a more complex topology via mutation, then run many
+    // parallel predictions to verify that the internal parallel evaluation path
+    // completes without deadlocks or race conditions.
+    let mut rng = StdRng::seed_from_u64(0xdeadbeef);
+    let settings = MutationSettings::default();
+    let mut net = NeuralNetwork::<4, 2>::new(&mut rng);
+    for _ in 0..20 {
+        net.mutate(&settings, 0.5, &mut rng);
+    }
+
+    let results: Vec<[f32; 2]> = (0..100_u32)
+        .into_par_iter()
+        .map(|i| {
+            let inputs = [i as f32 * 0.01, 0.5, -0.3, 1.0];
+            net.predict(inputs)
+        })
+        .collect();
+
+    // All outputs should be finite (no NaN / Inf from race conditions).
+    for outputs in &results {
+        for &v in outputs {
+            assert!(v.is_finite(), "non-finite output {v} detected");
+        }
+    }
+}
+
 const NUM_MUTATIONS: usize = 50;
 const MUTATION_RATE: f32 = 0.25;
 #[test]
