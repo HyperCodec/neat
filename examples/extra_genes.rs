@@ -352,7 +352,7 @@ fn main() {
 
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, POPULATION_SIZE),
-        FitnessEliminator::new_with_default(evaluate_organism),
+        FitnessEliminator::new_without_observer(evaluate_organism),
         CrossoverRepopulator::new(MUTATION_RATE, OrganismCtx::default()),
     );
 
