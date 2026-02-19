@@ -3,7 +3,7 @@ pub fn sigmoid(n: f32) -> f32 {
     1. / (1. + std::f32::consts::E.powf(-n))
 }
 
-/// The ReLU activation function. Equal to `n.max(0)``
+/// The ReLU activation function. Equal to `n.max(0)`
 pub fn relu(n: f32) -> f32 {
     n.max(0.)
 }
