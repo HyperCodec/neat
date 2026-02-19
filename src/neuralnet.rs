@@ -1262,15 +1262,15 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
         match loc.as_ref() {
             NeuronLocation::Input(i) => {
                 let c = &self.input_layer[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
             }
             NeuronLocation::Hidden(i) => {
                 let c = &self.hidden_layers[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
             }
             NeuronLocation::Output(i) => {
                 let c = &self.output_layer[*i];
-                c.expected_inputs >= c.finished_inputs.load(Ordering::SeqCst)
+                c.finished_inputs.load(Ordering::SeqCst) >= c.expected_inputs
             }
         }
     }
