@@ -4,7 +4,7 @@ pub mod builtin;
 use bitflags::bitflags;
 use builtin::*;
 
-use genetic_rs::prelude::{RngExt, rand};
+use genetic_rs::prelude::{rand, RngExt};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
