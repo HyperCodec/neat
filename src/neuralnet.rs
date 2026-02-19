@@ -141,17 +141,24 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     fn eval(&self, loc: NeuronLocation, cache: Arc<NeuralNetCache<I, O>>) {
-        if !cache.claim(loc) {
-            // some other thread is already
-            // waiting to do this task, currently doing it, or done.
-            // no need to do it again.
+        if !cache.is_ready(loc) {
+            // Not all inputs have arrived yet.
+            // The last upstream neuron to contribute will call eval again
+            // and find the neuron ready at that point.
             return;
         }
 
-        while !cache.is_ready(loc) {
-            // essentially spinlocks until the dependency tasks are complete,
-            // while letting this thread do some work on random tasks.
-            rayon::yield_now();
+        if !cache.claim(loc) {
+            // `claim` is still required even though `is_ready` is checked first.
+            //
+            // There is a TOCTOU race: thread A's `is_ready` load can occur
+            // *after* thread B's `finished_inputs.fetch_add` in the SeqCst
+            // total order, even though A's own `add` completed first.  Both
+            // threads can therefore observe `is_ready = true` for the same
+            // neuron simultaneously.  Without this guard both would evaluate
+            // the neuron and double-contribute to every downstream neuron,
+            // cascading into incorrect results.
+            return;
         }
 
         let n = &self[loc];
