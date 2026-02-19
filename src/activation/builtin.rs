@@ -1,4 +1,4 @@
-/// The sigmoid activation function. Scales all values nonlinearly in the range of 1 to -1.
+/// The sigmoid activation function. Scales all values nonlinearly to the range (0, 1).
 pub fn sigmoid(n: f32) -> f32 {
     1. / (1. + std::f32::consts::E.powf(-n))
 }
