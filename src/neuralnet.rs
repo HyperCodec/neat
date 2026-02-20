@@ -376,7 +376,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Mutates a connection's weight.
-    pub fn mutate_weight(&mut self, connection: Connection, amount: f32, rng: &mut impl Rng) -> Option<f32> {
+    pub fn mutate_weight(
+        &mut self,
+        connection: Connection,
+        amount: f32,
+        rng: &mut impl Rng,
+    ) -> Option<f32> {
         let n = &mut self[connection.from];
         n.mutate_weight(connection.to, amount, rng)
     }
