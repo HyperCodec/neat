@@ -36,6 +36,9 @@ required-features = ["serde"]
 default = []
 serde = ["dep:serde", "dep:serde-big-array"]
 
+[profile.test]
+opt-level = 3
+
 [dependencies]
 atomic_float = "1.1.0"
 bitflags = "2.11.0"
@@ -48,4 +51,3 @@ serde-big-array = { version = "0.5.1", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0.149"
-serde_path_to_error = "0.1.20"
