@@ -261,8 +261,9 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         if connection.from.is_output()
             || connection.to.is_input()
             || connection.from == connection.to
-            || (self.neuron_exists(connection.from)
-                && self[connection.from].outputs.contains_key(&connection.to))
+            || !self.neuron_exists(connection.from)
+            || !self.neuron_exists(connection.to)
+            || self[connection.from].outputs.contains_key(&connection.to)
         {
             return false;
         }
