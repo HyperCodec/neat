@@ -777,3 +777,131 @@ fn debug_add_connection_cycle() {
     }
     println!("No cycles found!");
 }
+
+#[test] 
+fn debug_split_creates_cycle() {
+    // Check whether split_connection creates cycles
+    let settings_with_mut = ReproductionSettings::default();
+    
+    for seed in 0..50u64 {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let mut net1 = NeuralNetwork::<10, 10>::new(&mut rng);
+        let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
+        
+        for iter in 0..50usize {
+            let a = net1.crossover(&net2, &settings_with_mut, 0.25, &mut rng);
+            let b = net2.crossover(&net1, &settings_with_mut, 0.25, &mut rng);
+            
+            // Check if there's a cycle in the networks just from split operations
+            // We'll do this by checking after each mutation pass manually
+            // For now, just check that we can use is_connection_safe consistently
+            
+            // Verify: for every existing edge u->v, is_connection_safe(v->u) should be false
+            // (since u->v exists, v->u would create a 2-cycle)
+            let mut found_issue = false;
+            for i in 0..10usize {
+                let from = NeuronLocation::Input(i);
+                let outputs = a[from].outputs.keys().cloned().collect::<Vec<_>>();
+                for to in outputs {
+                    // Edge from->to exists. Adding to->from should be unsafe.
+                    // But to->from might be blocked by "from.is_output()" or "to.is_input()" checks.
+                    if !to.is_input() && !from.is_output() {
+                        // If from is Input, then to is not Input. to->from = to->Input(i).
+                        // is_connection_safe checks "connection.to.is_input()" -> false.
+                        // So it returns false. Expected.
+                    }
+                }
+            }
+            for i in 0..a.hidden_layers.len() {
+                let from = NeuronLocation::Hidden(i);
+                let outputs = a[from].outputs.keys().cloned().collect::<Vec<_>>();
+                for to in outputs {
+                    // Edge from->to (Hidden(i)->to). Can we add to->Hidden(i)?
+                    if to.is_hidden() || to.is_input() {
+                        // to->Hidden(i): to is not output (hidden or input)
+                        // is_connection_safe checks:
+                        // - to.is_output() -> false if to is hidden/input ✓ 
+                        //   Wait, "to" here is the "from" in the reverse connection!
+                        let rev_conn = Connection { from: to, to: from };
+                        // Check if connection.from.is_output() blocks it
+                        if to.is_output() {
+                            // "from.is_output()" in is_connection_safe returns false
+                            assert!(!a.is_connection_safe(rev_conn));
+                        } else if from.is_input() {
+                            // "to.is_input()" in is_connection_safe returns false  
+                            assert!(!a.is_connection_safe(rev_conn));
+                        } else {
+                            // Should be unsafe since there's already from->to
+                            if a.is_connection_safe(rev_conn) {
+                                println!("BUG: seed={} iter={}: is_connection_safe says {:?}->{:?} is SAFE but {:?}->{:?} exists!", 
+                                    seed, iter, to, from, from, to);
+                                // Print the cycle path
+                                println!("  {:?} outputs: {:?}", from, a[from].outputs.keys().collect::<Vec<_>>());
+                                println!("  {:?} outputs: {:?}", to, a[to].outputs.keys().collect::<Vec<_>>());
+                                found_issue = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if found_issue {
+                return;
+            }
+            
+            net1 = a;
+            net2 = b;
+        }
+    }
+    println!("No issues found!");
+}
+
+#[test]
+fn debug_find_mutation_pass_cycle() {
+    let settings = ReproductionSettings::default();
+    let mut settings0 = settings.clone(); settings0.mutation_passes = 0;
+    let mut settings1 = settings.clone(); settings1.mutation_passes = 1;
+    let mut settings2 = settings.clone(); settings2.mutation_passes = 2;
+    let mut settings3 = settings.clone(); // mutation_passes = 3
+    
+    'outer: for seed in 0..100u64 {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let mut net1 = NeuralNetwork::<10, 10>::new(&mut rng);
+        let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
+
+        for iter in 0..50usize {
+            // We can't easily replay RNG, so just check the final result
+            let a = net1.crossover(&net2, &settings3, 0.25, &mut rng);
+            let b = net2.crossover(&net1, &settings3, 0.25, &mut rng);
+            
+            // Verify that a network that claims to be acyclic is consistent with is_connection_safe
+            // For a network with cycle C->D->E->C, is_connection_safe(E->C) should be false
+            // But it might be TRUE (that's the bug)
+            if let Some(cycle) = find_cycle_helper(&a) {
+                println!("seed={} iter={} CYCLE in a: {:?}", seed, iter, cycle);
+                // Find the specific edge in the cycle that is_connection_safe missed
+                for i in 0..cycle.len() {
+                    let from = cycle[i];
+                    let to = cycle[(i+1) % cycle.len()];
+                    // This edge exists in the network
+                    println!("  Edge {:?} -> {:?} exists. Checking if is_connection_safe would allow adding it again:", from, to);
+                    // Check reverse edge
+                    if !to.is_input() && !from.is_output() {
+                        let safe = a.is_connection_safe(Connection { from: to, to: from });
+                        println!("    is_connection_safe({:?} -> {:?}) = {} (should be false for cycle)", to, from, safe);
+                    }
+                }
+                println!("  Full network connections:");
+                for i in 0..a.hidden_layers.len() {
+                    let n = &a[NeuronLocation::Hidden(i)];
+                    println!("    Hidden({}) -> {:?}", i, n.outputs.keys().collect::<Vec<_>>());
+                }
+                break 'outer;
+            }
+            
+            net1 = a;
+            net2 = b;
+        }
+    }
+    println!("Done searching");
+}
