@@ -216,6 +216,53 @@ fn add_connection() {
 }
 
 #[test]
+fn add_connection_converging_paths() {
+    // Validates that is_connection_safe allows valid DAGs with converging paths
+    // (multiple routes to the same downstream neuron), rather than falsely
+    // treating shared descendants as cycles.
+    let mut rng = StdRng::seed_from_u64(0xabcdef);
+
+    // Build: Input(0) -> Hidden(0) -> Output(0)
+    //                 -> Hidden(1) -> Output(0)
+    // Both hidden neurons feed into the same output, creating a converging path.
+    let mut net = NeuralNetwork {
+        input_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+        hidden_layers: vec![
+            Neuron::new_with_activation(
+                HashMap::new(),
+                activation_fn!(linear_activation),
+                &mut rng,
+            ),
+            Neuron::new_with_activation(
+                HashMap::new(),
+                activation_fn!(linear_activation),
+                &mut rng,
+            ),
+        ],
+        output_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+    };
+
+    // Hidden(0) -> Output(0)
+    assert!(net.add_connection(Connection { from: NeuronLocation::Hidden(0), to: NeuronLocation::Output(0) }, 1.0));
+    // Hidden(1) -> Output(0)
+    assert!(net.add_connection(Connection { from: NeuronLocation::Hidden(1), to: NeuronLocation::Output(0) }, 1.0));
+    // Input -> Hidden(0): should be safe
+    assert!(net.add_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Hidden(0) }, 1.0));
+    // Input -> Hidden(1): should also be safe despite both hidden nodes sharing Output(0)
+    assert!(net.add_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Hidden(1) }, 1.0));
+
+    assert_network_invariants(&net);
+}
+
+#[test]
 fn remove_connection() {
     let mut rng = StdRng::seed_from_u64(0xabcdef);
     let mut net = NeuralNetwork {
