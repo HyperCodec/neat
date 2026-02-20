@@ -87,7 +87,7 @@ impl ActivationRegistry {
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| a.scope != NeuronScope::NONE && a.scope.contains(scope))
+            .filter(|a| a.scope.contains(scope))
             .collect()
     }
 
