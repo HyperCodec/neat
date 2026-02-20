@@ -422,6 +422,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             panic!("cannot select from empty scope");
         }
 
+        if scope == NeuronScope::HIDDEN && self.hidden_layers.is_empty() {
+            panic!("cannot select hidden neuron: no hidden neurons in the network");
+        }
+
         let mut layers = Vec::with_capacity(3);
         if scope.contains(NeuronScope::INPUT) {
             layers.push((NeuronLocation::Input(0), I));
