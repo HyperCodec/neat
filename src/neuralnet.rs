@@ -122,6 +122,11 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Runs the neural network, propagating values from input to output layer.
+    ///
+    /// This method evaluates the network in parallel and may spawn parallel
+    /// tasks/threads internally (for example, via a thread pool). As a result,
+    /// its performance and behavior may differ between single-threaded and
+    /// multi-threaded execution contexts.
     pub fn predict(&self, inputs: [f32; I]) -> [f32; O] {
         let cache = Arc::new(NeuralNetCache::from(self));
         cache.prime_inputs(inputs);
