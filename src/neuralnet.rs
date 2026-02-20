@@ -412,6 +412,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             layers.push((NeuronLocation::Output(0), O));
         }
 
+        if layers.is_empty() {
+            panic!(
+                "cannot select neuron: requested scope {:?} has no available neurons",
+                scope
+            );
+        }
         let (mut loc, size) = layers[rng.random_range(0..layers.len())];
         loc.set_inner(rng.random_range(0..size));
         loc
