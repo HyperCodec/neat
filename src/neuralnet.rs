@@ -249,10 +249,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Adds a connection but does not check for cyclic linkages.
     pub fn add_connection_unchecked(&mut self, connection: Connection, weight: f32) {
         let a = &mut self[connection.from];
-        a.outputs.insert(connection.to, weight);
+        let prev = a.outputs.insert(connection.to, weight);
 
-        let b = &mut self[connection.to];
-        b.input_count += 1;
+        // Only increment the input count if this is a new connection.
+        if prev.is_none() {
+            let b = &mut self[connection.to];
+            b.input_count += 1;
+        }
     }
 
     /// Returns false if the connection is cyclic or the input/output neurons are otherwise invalid in some other way.
