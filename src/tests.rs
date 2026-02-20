@@ -349,7 +349,7 @@ fn remove_connection() {
 
 #[test]
 fn predict_basic() {
-    // Build a minimal 1-in / 1-out network with linear activations and zero bias
+    // build a minimal 1-in / 1-out network with linear activations and zero bias
     // so the output is exactly: input * weight.
     let weight = 0.5_f32;
     let net = NeuralNetwork {
@@ -377,7 +377,7 @@ fn predict_basic() {
         outputs[0]
     );
 
-    // Zero input should yield zero output (no bias).
+    // zero input should yield zero output (no bias).
     let outputs_zero = net.predict([0.0]);
     assert!(
         outputs_zero[0].abs() < 1e-5,
@@ -385,8 +385,8 @@ fn predict_basic() {
         outputs_zero[0]
     );
 
-    // Stress-test with random networks using default (sigmoid) output activations.
-    // Use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
+    // stress-test with random networks using default (sigmoid) output activations.
+    // use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
     for seed in 0..TEST_COUNT {
         let mut rng = StdRng::seed_from_u64(seed);
         let net = NeuralNetwork::<5, 5>::new(&mut rng);

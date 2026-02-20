@@ -211,24 +211,28 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn add_neuron(&mut self, mut n: Neuron) -> bool {
         let mut valid = true;
         let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
-        let outputs = n.outputs.keys().cloned().collect::<Vec<_>>();
-        for loc in outputs {
+        let outputs = std::mem::take(&mut n.outputs);
+
+        self.hidden_layers.push(n);
+
+        for (loc, weight) in outputs {
             if !self.neuron_exists(loc)
                 || !self.is_connection_safe(Connection {
                     from: new_loc,
                     to: loc,
                 })
             {
-                n.outputs.remove(&loc);
                 valid = false;
                 continue;
             }
 
+            self.hidden_layers[new_loc.inner()]
+                .outputs
+                .insert(loc, weight);
+
             let n = &mut self[loc];
             n.input_count += 1;
         }
-
-        self.hidden_layers.push(n);
 
         valid
     }
