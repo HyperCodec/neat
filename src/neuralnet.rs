@@ -499,6 +499,10 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             panic!("cannot remove neurons in input or output layer");
         }
 
+        // Enforce the documented precondition: this function must only be used on hanging neurons.
+        if self[loc].input_count != 0 {
+            panic!("remove_neuron called on non-hanging neuron; use higher-level removal methods (e.g., remove_connection) instead");
+        }
         let initial_i = loc.inner();
 
         let mut work = VecDeque::new();
