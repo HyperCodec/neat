@@ -1282,17 +1282,17 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
     }
 
     /// Adds a value to the neuron at the specified location and increments [`finished_inputs`][NeuronCache::finished_inputs].
-    pub fn add(&self, loc: impl AsRef<NeuronLocation>, n: f32) -> f32 {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => self.input_layer[*i].value.fetch_add(n, Ordering::SeqCst),
+    pub fn add(&self, loc: NeuronLocation, n: f32) -> f32 {
+        match loc {
+            NeuronLocation::Input(i) => self.input_layer[i].value.fetch_add(n, Ordering::SeqCst),
             NeuronLocation::Hidden(i) => {
-                let c = &self.hidden_layers[*i];
+                let c = &self.hidden_layers[i];
                 let v = c.value.fetch_add(n, Ordering::SeqCst);
                 c.finished_inputs.fetch_add(1, Ordering::SeqCst);
                 v
             }
             NeuronLocation::Output(i) => {
-                let c = &self.output_layer[*i];
+                let c = &self.output_layer[i];
                 let v = c.value.fetch_add(n, Ordering::SeqCst);
                 c.finished_inputs.fetch_add(1, Ordering::SeqCst);
                 v
@@ -1323,17 +1323,17 @@ impl<const I: usize, const O: usize> NeuralNetCache<I, O> {
     }
 
     /// Attempts to claim a neuron. Returns false if it has already been claimed.
-    pub fn claim(&self, loc: impl AsRef<NeuronLocation>) -> bool {
-        match loc.as_ref() {
-            NeuronLocation::Input(i) => self.input_layer[*i]
+    pub fn claim(&self, loc: NeuronLocation) -> bool {
+        match loc {
+            NeuronLocation::Input(i) => self.input_layer[i]
                 .claimed
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok(),
-            NeuronLocation::Hidden(i) => self.hidden_layers[*i]
+            NeuronLocation::Hidden(i) => self.hidden_layers[i]
                 .claimed
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok(),
-            NeuronLocation::Output(i) => self.output_layer[*i]
+            NeuronLocation::Output(i) => self.output_layer[i]
                 .claimed
                 .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
                 .is_ok(),
