@@ -80,6 +80,10 @@ impl ActivationRegistry {
 
     /// Gets all activation functions that are valid for a scope.
     pub fn activations_in_scope(&self, scope: NeuronScope) -> Vec<ActivationFn> {
+        if scope == NeuronScope::NONE {
+            return Vec::new();
+        }
+
         let acts = self.activations();
 
         acts.into_iter()
@@ -197,13 +201,11 @@ impl<'a> Deserialize<'a> for ActivationFn {
 
         let reg = ACTIVATION_REGISTRY.read().unwrap();
 
-        let f = reg.fns.get(name.as_str());
+        let f = reg.fns.get(name.as_str()).ok_or_else(|| {
+            serde::de::Error::custom(format!("Activation function {name} not found"))
+        })?;
 
-        if f.is_none() {
-            panic!("Activation function {name} not found");
-        }
-
-        Ok(f.unwrap().clone())
+        Ok(f.clone())
     }
 }
 

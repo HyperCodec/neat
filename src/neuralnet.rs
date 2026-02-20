@@ -346,7 +346,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// doesn't have any outbound connections.
     /// Returns the connection if it found one before reaching max_retries.
     pub fn get_random_connection(
-        &mut self,
+        &self,
         max_retries: usize,
         rng: &mut impl rand::Rng,
     ) -> Option<Connection> {
