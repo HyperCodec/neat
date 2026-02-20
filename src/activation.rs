@@ -201,10 +201,9 @@ impl<'a> Deserialize<'a> for ActivationFn {
 
         let reg = ACTIVATION_REGISTRY.read().unwrap();
 
-        let f = reg
-            .fns
-            .get(name.as_str())
-            .ok_or_else(|| serde::de::Error::custom(format!("Activation function {name} not found")))?;
+        let f = reg.fns.get(name.as_str()).ok_or_else(|| {
+            serde::de::Error::custom(format!("Activation function {name} not found"))
+        })?;
 
         Ok(f.clone())
     }
