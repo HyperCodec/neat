@@ -277,18 +277,27 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         {
             return false;
         }
-        let mut visited = HashSet::from([connection.from]);
-        self.dfs(&mut visited, connection.to)
+        let mut visited = HashSet::new();
+        self.dfs(&mut visited, connection.to, connection.from)
     }
 
-    fn dfs(&self, visited: &mut HashSet<NeuronLocation>, current: NeuronLocation) -> bool {
-        if !visited.insert(current) {
+    fn dfs(
+        &self,
+        visited: &mut HashSet<NeuronLocation>,
+        current: NeuronLocation,
+        start: NeuronLocation,
+    ) -> bool {
+        if current == start {
             return false;
+        }
+
+        if !visited.insert(current) {
+            return true;
         }
 
         let n = &self[current];
         for loc in n.outputs.keys() {
-            if !self.dfs(visited, *loc) {
+            if !self.dfs(visited, *loc, start) {
                 return false;
             }
         }

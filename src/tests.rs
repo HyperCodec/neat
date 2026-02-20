@@ -216,6 +216,78 @@ fn add_connection() {
 }
 
 #[test]
+fn add_connection_converging_paths() {
+    // Validates that is_connection_safe allows "diamond" DAG topologies where a single
+    // node has two outgoing paths that both reach the same downstream neuron:
+    //   Hidden(0) -> Output(0)               (direct)
+    //   Hidden(0) -> Hidden(1) -> Output(0)  (indirect)
+    // Adding Input(0) -> Hidden(0) is safe (no cycle); the original dfs falsely
+    // rejected it by treating the second visit to Output(0) as a cycle.
+    let mut rng = StdRng::seed_from_u64(0xabcdef);
+
+    let mut net = NeuralNetwork {
+        input_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+        hidden_layers: vec![
+            Neuron::new_with_activation(
+                HashMap::new(),
+                activation_fn!(linear_activation),
+                &mut rng,
+            ),
+            Neuron::new_with_activation(
+                HashMap::new(),
+                activation_fn!(linear_activation),
+                &mut rng,
+            ),
+        ],
+        output_layer: [Neuron::new_with_activation(
+            HashMap::new(),
+            activation_fn!(linear_activation),
+            &mut rng,
+        )],
+    };
+
+    // Build the diamond: Hidden(0) -> Output(0) and Hidden(0) -> Hidden(1) -> Output(0)
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(0),
+            to: NeuronLocation::Output(0)
+        },
+        1.0
+    ));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(1),
+            to: NeuronLocation::Output(0)
+        },
+        1.0
+    ));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(0),
+            to: NeuronLocation::Hidden(1)
+        },
+        1.0
+    ));
+
+    // Input(0) -> Hidden(0) is safe (no cycle), but the original dfs falsely rejected it
+    // because traversing from Hidden(0) visits Output(0) via the direct path first, then
+    // encounters Output(0) again via Hidden(1), treating the revisit as a cycle.
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Input(0),
+            to: NeuronLocation::Hidden(0)
+        },
+        1.0
+    ));
+
+    assert_network_invariants(&net);
+}
+
+#[test]
 fn remove_connection() {
     let mut rng = StdRng::seed_from_u64(0xabcdef);
     let mut net = NeuralNetwork {
