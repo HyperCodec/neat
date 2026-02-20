@@ -459,7 +459,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             panic!("cannot remove neurons in input or output layer");
         }
 
-        let initial_i = loc.unwrap();
+        let initial_i = loc.inner();
 
         let mut work = VecDeque::new();
         work.push_back(loc);
@@ -492,7 +492,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
                 continue;
             }
 
-            let i = cur_loc.unwrap();
+            let i = cur_loc.inner();
             if i < self.hidden_layers.len() {
                 self.hidden_layers.remove(i);
                 if i <= initial_i {
@@ -1159,7 +1159,7 @@ impl NeuronLocation {
     }
 
     /// Retrieves the index value, regardless of layer. Does not consume.
-    pub fn unwrap(&self) -> usize {
+    pub fn inner(&self) -> usize {
         match self {
             Self::Input(i) => *i,
             Self::Hidden(i) => *i,
