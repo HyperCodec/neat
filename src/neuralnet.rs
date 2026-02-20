@@ -466,12 +466,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         false
     }
 
-    /// Remove a neuron and downshift all connection indices to compensate for it.
+    /// Remove a neuron and downshift all connection indices in the network to compensate for it.
     /// Returns the number of neurons removed that were under the index of the removed neuron (including itself).
     /// This will also deal with hanging neurons iteratively to avoid recursion that
     /// can invalidate stored indices during nested deletions.
     /// This method assumes that the neuron is hanging (input_count == 0) and requires that it is in the hidden layer.
-    /// It will not remove connections pointing to the neuron automatically.
+    /// It will not remove connections going into the removed neuron automatically.
     pub fn remove_neuron(&mut self, loc: NeuronLocation) -> usize {
         if !loc.is_hidden() {
             panic!("cannot remove neurons in input or output layer");
@@ -523,6 +523,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         removed
     }
 
+    /// Downshift all connection indices greater than `i` by 1 to compensate for a removed neuron at index `i`.
+    /// Also removes any connections that point to the removed neuron.
     fn downshift_connections(&mut self, i: usize, work: &mut VecDeque<NeuronLocation>) {
         self.input_layer
             .par_iter_mut()
@@ -1122,9 +1124,10 @@ impl Neuron {
     pub(crate) fn downshift_outputs(&mut self, i: usize) {
         replace_with_or_abort(&mut self.outputs, |o| {
             o.into_par_iter()
-                .map(|(loc, w)| match loc {
-                    NeuronLocation::Hidden(j) if j > i => (NeuronLocation::Hidden(j - 1), w),
-                    _ => (loc, w),
+                .filter_map(|(loc, w)| match loc {
+                    NeuronLocation::Hidden(j) if j > i => Some((NeuronLocation::Hidden(j - 1), w)),
+                    NeuronLocation::Hidden(j) if j == i => None,
+                    _ => Some((loc, w)),
                 })
                 .collect()
         });

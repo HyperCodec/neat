@@ -329,10 +329,10 @@ fn predict_basic() {
 
 #[test]
 fn predict_consistency() {
-    // Repeated calls with the same inputs must return results within floating-point
-    // tolerance. Exact equality is not guaranteed because the parallel atomic
+    // repeated calls with the same inputs must return results within floating-point
+    // tolerance. exact equality is not guaranteed because the parallel atomic
     // accumulation order may vary between runs.
-    // Use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
+    // use a sequential loop to avoid nested rayon parallelism (predict uses rayon internally).
     for seed in 0..TEST_COUNT {
         let mut rng = StdRng::seed_from_u64(seed);
         let net = NeuralNetwork::<5, 3>::new(&mut rng);
@@ -352,7 +352,7 @@ fn predict_consistency() {
 
 #[test]
 fn predict_parallel_no_deadlock() {
-    // Build a network with a more complex topology via mutation, then run many
+    // build a network with a more complex topology via mutation, then run many
     // parallel predictions to verify that the internal parallel evaluation path
     // completes without deadlocks or race conditions.
     let mut rng = StdRng::seed_from_u64(0xdeadbeef);
@@ -370,7 +370,7 @@ fn predict_parallel_no_deadlock() {
         })
         .collect();
 
-    // All outputs should be finite (no NaN / Inf from race conditions).
+    // all outputs should be finite (no NaN / inf from race conditions).
     for outputs in &results {
         for &v in outputs {
             assert!(v.is_finite(), "non-finite output {v} detected");
