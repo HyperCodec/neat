@@ -454,6 +454,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     /// Returns the number of neurons removed that were under the index of the removed neuron (including itself).
     /// This will also deal with hanging neurons iteratively to avoid recursion that
     /// can invalidate stored indices during nested deletions.
+    /// This method assumes that the neuron is hanging (input_count == 0) and requires that it is in the hidden layer.
+    /// It will not remove connections pointing to the neuron automatically.
     pub fn remove_neuron(&mut self, loc: NeuronLocation) -> usize {
         if !loc.is_hidden() {
             panic!("cannot remove neurons in input or output layer");
