@@ -197,7 +197,8 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    /// Adds a new neuron to hidden layer. Updates [`input_count`][Neuron::input_count]s automatically.
+    /// Adds a new neuron to hidden layer. Updates [`input_count`][Neuron::input_count]s automatically for its outputs.
+    /// Assumes there were no invalid connections pointing to `NeuronLocation::Hidden(self.hidden_layers.len())` before the call.
     /// Removes any output connections that point to invalid neurons or would result in cyclic linkage.
     /// Returns whether all output connections were valid.
     /// Due to the cyclic check, this function has time complexity O(nm), where n is the number of neurons
