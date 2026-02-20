@@ -229,6 +229,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     }
 
     /// Split a [`Connection`] into two of the same weight, joined by a new [`Neuron`] in the hidden layer(s).
+    /// Panics if the endpoints of the connection are invalid or if the connection does not exist.
     pub fn split_connection(&mut self, connection: Connection, rng: &mut impl Rng) {
         let new_loc = NeuronLocation::Hidden(self.hidden_layers.len());
 
