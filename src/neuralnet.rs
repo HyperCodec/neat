@@ -274,7 +274,12 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         self.dfs(&mut visited, connection.to, connection.from)
     }
 
-    fn dfs(&self, visited: &mut HashSet<NeuronLocation>, current: NeuronLocation, start: NeuronLocation) -> bool {
+    fn dfs(
+        &self,
+        visited: &mut HashSet<NeuronLocation>,
+        current: NeuronLocation,
+        start: NeuronLocation,
+    ) -> bool {
         if current == start {
             return false;
         }

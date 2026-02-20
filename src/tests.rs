@@ -251,14 +251,38 @@ fn add_connection_converging_paths() {
     };
 
     // Build the diamond: Hidden(0) -> Output(0) and Hidden(0) -> Hidden(1) -> Output(0)
-    assert!(net.add_connection(Connection { from: NeuronLocation::Hidden(0), to: NeuronLocation::Output(0) }, 1.0));
-    assert!(net.add_connection(Connection { from: NeuronLocation::Hidden(1), to: NeuronLocation::Output(0) }, 1.0));
-    assert!(net.add_connection(Connection { from: NeuronLocation::Hidden(0), to: NeuronLocation::Hidden(1) }, 1.0));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(0),
+            to: NeuronLocation::Output(0)
+        },
+        1.0
+    ));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(1),
+            to: NeuronLocation::Output(0)
+        },
+        1.0
+    ));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Hidden(0),
+            to: NeuronLocation::Hidden(1)
+        },
+        1.0
+    ));
 
     // Input(0) -> Hidden(0) is safe (no cycle), but the original dfs falsely rejected it
     // because traversing from Hidden(0) visits Output(0) via the direct path first, then
     // encounters Output(0) again via Hidden(1), treating the revisit as a cycle.
-    assert!(net.add_connection(Connection { from: NeuronLocation::Input(0), to: NeuronLocation::Hidden(0) }, 1.0));
+    assert!(net.add_connection(
+        Connection {
+            from: NeuronLocation::Input(0),
+            to: NeuronLocation::Hidden(0)
+        },
+        1.0
+    ));
 
     assert_network_invariants(&net);
 }
