@@ -344,6 +344,9 @@ fn evaluate_organism(genome: &OrganismGenome) -> f32 {
 }
 
 fn main() {
+    #[cfg(debug_assertions)]
+    println!("You're running on the debug profile, which is not optimized. Consider running with --release for significantly better performance.");
+
     let mut rng = rand::rng();
 
     println!("Starting genetic NEAT simulation with physical traits");
