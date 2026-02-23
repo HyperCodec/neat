@@ -18,7 +18,7 @@ use neat::*;
 fn fitness(net: &NeuralNetwork<5, 6>) -> f32 {
     // ideally you'd test multiple times for consistency,
     // but this is just a simple example.
-    // it's also generally good to normalize your inputs between -1..1,
+    // it's also generally good practice to normalize your inputs between -1..1,
     // but NEAT is usually flexible enough to still work anyways
     let inputs = [1.0, 2.0, 3.0, 4.0, 5.0];
     let outputs = net.predict(inputs);
@@ -54,20 +54,12 @@ struct PhysicalStats {
 // ... implement `RandomlyMutable`, `GenerateRandom`, `Crossover`, `Default`, etc.
 
 #[derive(Clone, Debug, GenerateRandom, RandomlyMutable, Mitosis, Crossover)]
-#[randmut(create_context = MyGenomeCtx)]
-#[crossover(with_context = MyGenomeCtx)]
+#[randmut(create_context(name = MyGenomeMutate, derive(Default, Clone, Debug)))]
+#[mitosis(create_context(name = MyGenomeReproduce, derive(Default, Clone, Debug)))]
+#[crossover(with_context = MyGenomeReproduce)]
 struct MyGenome {
     brain: NeuralNetwork<4, 2>,
     stats: PhysicalStats,
-}
-
-impl Default for MyGenomeCtx {
-    fn default() -> Self {
-        Self {
-            brain: ReproductionSettings::default(),
-            stats: PhysicalStats::default(),
-        }
-    }
 }
 
 fn fitness(genome: &MyGenome) -> f32 {
