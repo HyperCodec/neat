@@ -650,7 +650,7 @@ fn debug_find_bad_connection() {
     let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
     let settings = ReproductionSettings::default();
 
-    for iter in 0..47usize {
+    for _iter in 0..47usize {
         let a = net1.crossover(&net2, &settings, 0.25, &mut rng);
         let b = net2.crossover(&net1, &settings, 0.25, &mut rng);
         net1 = a;
@@ -704,7 +704,7 @@ fn debug_find_bad_connection2() {
     let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
     let settings = ReproductionSettings::default();
 
-    for iter in 0..47usize {
+    for _iter in 0..47usize {
         let a = net1.crossover(&net2, &settings, 0.25, &mut rng);
         let b = net2.crossover(&net1, &settings, 0.25, &mut rng);
         net1 = a;
@@ -725,9 +725,6 @@ fn debug_find_bad_connection2() {
     // We need separate snapshots of rng state for each test
     // But since we can't clone StdRng, let's just do it sequentially
 
-    // Do 0 mutations
-    let mut s0 = settings.clone();
-    s0.mutation_passes = 0;
     // Can't replay rng here... let's just do the actual crossover and check
 
     // Let's just do the full mutation=3 crossover and check step-by-step
@@ -899,13 +896,7 @@ fn debug_split_creates_cycle() {
 #[test]
 fn debug_find_mutation_pass_cycle() {
     let settings = ReproductionSettings::default();
-    let mut settings0 = settings.clone();
-    settings0.mutation_passes = 0;
-    let mut settings1 = settings.clone();
-    settings1.mutation_passes = 1;
-    let mut settings2 = settings.clone();
-    settings2.mutation_passes = 2;
-    let mut settings3 = settings.clone(); // mutation_passes = 3
+    let settings3 = settings.clone(); // mutation_passes = 3
 
     'outer: for seed in 0..100u64 {
         let mut rng = StdRng::seed_from_u64(seed);
