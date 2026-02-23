@@ -255,44 +255,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         let mut new_n = Neuron::new(outputs, NeuronScope::HIDDEN, rng);
         new_n.input_count = 1;
         self.hidden_layers.push(new_n);
-
-        // Temporary debug assertion: check that no cycle was created
-        #[cfg(test)]
-        {
-            use std::collections::HashMap as HM;
-            fn has_cycle_check<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> Option<NeuronLocation> {
-                fn dfs_check<const I: usize, const O: usize>(
-                    net: &NeuralNetwork<I, O>,
-                    loc: NeuronLocation,
-                    visited: &mut HM<NeuronLocation, bool>,
-                ) -> Option<NeuronLocation> {
-                    if let Some(&in_progress) = visited.get(&loc) {
-                        if in_progress { return Some(loc); }
-                        return None;
-                    }
-                    visited.insert(loc, true);
-                    for &loc2 in net[loc].outputs.keys() {
-                        if let Some(c) = dfs_check(net, loc2, visited) { return Some(c); }
-                    }
-                    visited.insert(loc, false);
-                    None
-                }
-                let mut visited = HM::new();
-                for i in 0..I {
-                    if let Some(c) = dfs_check(net, NeuronLocation::Input(i), &mut visited) { return Some(c); }
-                }
-                for i in 0..net.hidden_layers.len() {
-                    let loc = NeuronLocation::Hidden(i);
-                    if !visited.contains_key(&loc) {
-                        if let Some(c) = dfs_check(net, loc, &mut visited) { return Some(c); }
-                    }
-                }
-                None
-            }
-            if let Some(cycle_node) = has_cycle_check(self) {
-                panic!("split_connection({:?}) created a cycle! Cycle involves: {:?}", connection, cycle_node);
-            }
-        }
     }
 
     /// Adds a connection but does not check for cyclic linkages.
@@ -356,44 +318,6 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         self.add_connection_unchecked(connection, weight);
-
-        // Temporary debug assertion: check that no cycle was created
-        #[cfg(test)]
-        {
-            use std::collections::HashMap as HM;
-            fn has_cycle_check<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> Option<(NeuronLocation, NeuronLocation)> {
-                fn dfs_check<const I: usize, const O: usize>(
-                    net: &NeuralNetwork<I, O>,
-                    loc: NeuronLocation,
-                    visited: &mut HM<NeuronLocation, bool>,
-                ) -> Option<(NeuronLocation, NeuronLocation)> {
-                    if let Some(&in_progress) = visited.get(&loc) {
-                        if in_progress { return Some((loc, loc)); }
-                        return None;
-                    }
-                    visited.insert(loc, true);
-                    for &loc2 in net[loc].outputs.keys() {
-                        if let Some(c) = dfs_check(net, loc2, visited) { return Some(c); }
-                    }
-                    visited.insert(loc, false);
-                    None
-                }
-                let mut visited = HM::new();
-                for i in 0..I {
-                    if let Some(c) = dfs_check(net, NeuronLocation::Input(i), &mut visited) { return Some(c); }
-                }
-                for i in 0..net.hidden_layers.len() {
-                    let loc = NeuronLocation::Hidden(i);
-                    if !visited.contains_key(&loc) {
-                        if let Some(c) = dfs_check(net, loc, &mut visited) { return Some(c); }
-                    }
-                }
-                None
-            }
-            if let Some(cycle_node) = has_cycle_check(self) {
-                panic!("add_connection({:?}) created a cycle! Cycle involves: {:?}", connection, cycle_node);
-            }
-        }
 
         true
     }
@@ -754,12 +678,13 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
     pub fn remove_cycles(&mut self) {
         let mut visited = HashMap::new();
         let mut edges_to_remove: HashSet<Connection> = HashSet::new();
+        let mut path = Vec::new();
 
         for i in 0..I {
             self.remove_cycles_dfs(
                 &mut visited,
                 &mut edges_to_remove,
-                None,
+                &mut path,
                 NeuronLocation::Input(i),
             );
         }
@@ -769,7 +694,7 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         for i in 0..self.hidden_layers.len() {
             let loc = NeuronLocation::Hidden(i);
             if !visited.contains_key(&loc) {
-                self.remove_cycles_dfs(&mut visited, &mut edges_to_remove, None, loc);
+                self.remove_cycles_dfs(&mut visited, &mut edges_to_remove, &mut path, loc);
             }
         }
 
@@ -780,22 +705,23 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
     }
 
-    // colored dfs
+    // colored dfs using an explicit path stack so the back-edge (parent → current)
+    // is always identified correctly, regardless of HashMap iteration order.
     fn remove_cycles_dfs(
         &mut self,
         visited: &mut HashMap<NeuronLocation, u8>,
         edges_to_remove: &mut HashSet<Connection>,
-        prev: Option<NeuronLocation>,
+        path: &mut Vec<NeuronLocation>,
         current: NeuronLocation,
     ) {
         if let Some(&existing) = visited.get(&current) {
             if existing == 0 {
-                // part of current dfs - found a cycle
-                // prev must exist here since visited would be empty on first call.
-                let prev = prev.unwrap();
-                if self[prev].outputs.contains_key(&current) {
+                // part of current dfs path - found a cycle.
+                // path.last() is the node that just tried to visit `current`,
+                // so path.last() → current is the back-edge to remove.
+                if let Some(&parent) = path.last() {
                     edges_to_remove.insert(Connection {
-                        from: prev,
+                        from: parent,
                         to: current,
                     });
                 }
@@ -806,12 +732,14 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
         }
 
         visited.insert(current, 0);
+        path.push(current);
 
         let outputs = self[current].outputs.keys().cloned().collect::<Vec<_>>();
         for loc in outputs {
-            self.remove_cycles_dfs(visited, edges_to_remove, Some(current), loc);
+            self.remove_cycles_dfs(visited, edges_to_remove, path, loc);
         }
 
+        path.pop();
         visited.insert(current, 1);
     }
 
@@ -1099,151 +1027,8 @@ impl<const I: usize, const O: usize> Crossover for NeuralNetwork<I, O> {
 
         // resolve invariants
         child.remove_cycles();
-
-        // Debug: check after remove_cycles
-        #[cfg(test)]
-        {
-            use std::collections::HashMap as HM;
-            fn has_cycle_rc<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> bool {
-                fn dfs_rc<const I: usize, const O: usize>(
-                    net: &NeuralNetwork<I, O>,
-                    loc: NeuronLocation,
-                    visited: &mut HM<NeuronLocation, bool>,
-                ) -> bool {
-                    if let Some(&ip) = visited.get(&loc) { return ip; }
-                    visited.insert(loc, true);
-                    for &l in net[loc].outputs.keys() {
-                        if dfs_rc(net, l, visited) { return true; }
-                    }
-                    visited.insert(loc, false);
-                    false
-                }
-                let mut v = HM::new();
-                for i in 0..I {
-                    if dfs_rc(net, NeuronLocation::Input(i), &mut v) { return true; }
-                }
-                for i in 0..net.hidden_layers.len() {
-                    let loc = NeuronLocation::Hidden(i);
-                    if !v.contains_key(&loc) && dfs_rc(net, loc, &mut v) { return true; }
-                }
-                false
-            }
-            if has_cycle_rc(&child) {
-                // Print cycle details
-                fn find_cycle_info<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> Vec<NeuronLocation> {
-                    use std::collections::HashMap as HM2;
-                    fn dfs2<const I: usize, const O: usize>(
-                        net: &NeuralNetwork<I, O>,
-                        loc: NeuronLocation,
-                        visited: &mut HM2<NeuronLocation, bool>,
-                        path: &mut Vec<NeuronLocation>,
-                    ) -> Option<Vec<NeuronLocation>> {
-                        if let Some(&ip) = visited.get(&loc) {
-                            if ip {
-                                let s = path.iter().position(|&x| x == loc).unwrap_or(0);
-                                return Some(path[s..].to_vec());
-                            }
-                            return None;
-                        }
-                        visited.insert(loc, true);
-                        path.push(loc);
-                        for &l in net[loc].outputs.keys() {
-                            if let Some(c) = dfs2(net, l, visited, path) { return Some(c); }
-                        }
-                        path.pop();
-                        visited.insert(loc, false);
-                        None
-                    }
-                    let mut v = HM2::new();
-                    for i in 0..I {
-                        if let Some(c) = dfs2(net, NeuronLocation::Input(i), &mut v, &mut vec![]) { return c; }
-                    }
-                    for i in 0..net.hidden_layers.len() {
-                        let loc = NeuronLocation::Hidden(i);
-                        if !v.contains_key(&loc) {
-                            if let Some(c) = dfs2(net, loc, &mut v, &mut vec![]) { return c; }
-                        }
-                    }
-                    vec![]
-                }
-                let cycle = find_cycle_info(&child);
-                eprintln!("BUG: cycle exists AFTER remove_cycles: {:?}", cycle);
-                for &n in &cycle {
-                    eprintln!("  {:?} -> {:?}", n, child[n].outputs.keys().collect::<Vec<_>>());
-                }
-                panic!("BUG: cycle exists AFTER remove_cycles! See above.");
-            }
-        }
-
         child.reset_input_counts();
-
-        // Debug: check after reset_input_counts
-        #[cfg(test)]
-        {
-            use std::collections::HashMap as HM;
-            fn has_cycle_ric<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> bool {
-                fn dfs_ric<const I: usize, const O: usize>(
-                    net: &NeuralNetwork<I, O>,
-                    loc: NeuronLocation,
-                    visited: &mut HM<NeuronLocation, bool>,
-                ) -> bool {
-                    if let Some(&ip) = visited.get(&loc) { return ip; }
-                    visited.insert(loc, true);
-                    for &l in net[loc].outputs.keys() {
-                        if dfs_ric(net, l, visited) { return true; }
-                    }
-                    visited.insert(loc, false);
-                    false
-                }
-                let mut v = HM::new();
-                for i in 0..I {
-                    if dfs_ric(net, NeuronLocation::Input(i), &mut v) { return true; }
-                }
-                for i in 0..net.hidden_layers.len() {
-                    let loc = NeuronLocation::Hidden(i);
-                    if !v.contains_key(&loc) && dfs_ric(net, loc, &mut v) { return true; }
-                }
-                false
-            }
-            if has_cycle_ric(&child) {
-                panic!("BUG: cycle exists AFTER reset_input_counts!");
-            }
-        }
-
         child.prune_hanging_neurons();
-
-        // Debug: check after prune_hanging_neurons  
-        #[cfg(test)]
-        {
-            use std::collections::HashMap as HM;
-            fn has_cycle_phn<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> bool {
-                fn dfs_phn<const I: usize, const O: usize>(
-                    net: &NeuralNetwork<I, O>,
-                    loc: NeuronLocation,
-                    visited: &mut HM<NeuronLocation, bool>,
-                ) -> bool {
-                    if let Some(&ip) = visited.get(&loc) { return ip; }
-                    visited.insert(loc, true);
-                    for &l in net[loc].outputs.keys() {
-                        if dfs_phn(net, l, visited) { return true; }
-                    }
-                    visited.insert(loc, false);
-                    false
-                }
-                let mut v = HM::new();
-                for i in 0..I {
-                    if dfs_phn(net, NeuronLocation::Input(i), &mut v) { return true; }
-                }
-                for i in 0..net.hidden_layers.len() {
-                    let loc = NeuronLocation::Hidden(i);
-                    if !v.contains_key(&loc) && dfs_phn(net, loc, &mut v) { return true; }
-                }
-                false
-            }
-            if has_cycle_phn(&child) {
-                panic!("BUG: cycle exists AFTER prune_hanging_neurons!");
-            }
-        }
 
         for _ in 0..settings.mutation_passes {
             child.mutate(&settings.mutation, rate, rng);
