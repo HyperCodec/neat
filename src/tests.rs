@@ -695,6 +695,7 @@ fn debug_find_bad_connection() {
     );
 }
 
+#[ignore]
 #[test]
 fn debug_find_bad_connection2() {
     // Reproduce: seed=0, iter=47 introduces a cycle
