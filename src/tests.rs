@@ -514,7 +514,9 @@ mod serde {
 }
 
 #[allow(dead_code)]
-fn find_cycle_helper<const I: usize, const O: usize>(net: &NeuralNetwork<I, O>) -> Option<Vec<NeuronLocation>> {
+fn find_cycle_helper<const I: usize, const O: usize>(
+    net: &NeuralNetwork<I, O>,
+) -> Option<Vec<NeuronLocation>> {
     use std::collections::HashMap as HM;
     fn dfs<const I: usize, const O: usize>(
         net: &NeuralNetwork<I, O>,
@@ -574,12 +576,18 @@ fn debug_locate_cycle_source() {
             let a = net1.crossover(&net2, &settings_no_mut, 0.25, &mut rng);
             let b = net2.crossover(&net1, &settings_no_mut, 0.25, &mut rng);
             if let Some(cycle) = find_cycle_helper(&a) {
-                println!("remove_cycles FAILED: seed={} iter={} (a): {:?}", seed, iter, cycle);
+                println!(
+                    "remove_cycles FAILED: seed={} iter={} (a): {:?}",
+                    seed, iter, cycle
+                );
                 found_no_mut = true;
                 break 'outer;
             }
             if let Some(cycle) = find_cycle_helper(&b) {
-                println!("remove_cycles FAILED: seed={} iter={} (b): {:?}", seed, iter, cycle);
+                println!(
+                    "remove_cycles FAILED: seed={} iter={} (b): {:?}",
+                    seed, iter, cycle
+                );
                 found_no_mut = true;
                 break 'outer;
             }
@@ -588,7 +596,9 @@ fn debug_locate_cycle_source() {
         }
     }
     if !found_no_mut {
-        println!("remove_cycles seems correct (no cycles in 300 seeds x 100 iters without mutation)");
+        println!(
+            "remove_cycles seems correct (no cycles in 300 seeds x 100 iters without mutation)"
+        );
     }
 
     // Run with mutations to see if mutation introduces cycles
@@ -602,12 +612,18 @@ fn debug_locate_cycle_source() {
             let a = net1.crossover(&net2, &settings_with_mut, 0.25, &mut rng);
             let b = net2.crossover(&net1, &settings_with_mut, 0.25, &mut rng);
             if let Some(cycle) = find_cycle_helper(&a) {
-                println!("Mutation introduced cycle: seed={} iter={} (a): {:?}", seed, iter, cycle);
+                println!(
+                    "Mutation introduced cycle: seed={} iter={} (a): {:?}",
+                    seed, iter, cycle
+                );
                 found_with_mut = true;
                 break 'outer2;
             }
             if let Some(cycle) = find_cycle_helper(&b) {
-                println!("Mutation introduced cycle: seed={} iter={} (b): {:?}", seed, iter, cycle);
+                println!(
+                    "Mutation introduced cycle: seed={} iter={} (b): {:?}",
+                    seed, iter, cycle
+                );
                 found_with_mut = true;
                 break 'outer2;
             }
@@ -618,9 +634,12 @@ fn debug_locate_cycle_source() {
     if !found_with_mut {
         println!("Mutations don't introduce cycles either (no cycles found)");
     }
-    
+
     assert!(!found_no_mut, "remove_cycles is broken");
-    assert!(!found_with_mut, "mutation is adding cycles (is_connection_safe is broken)");
+    assert!(
+        !found_with_mut,
+        "mutation is adding cycles (is_connection_safe is broken)"
+    );
 }
 
 #[test]
@@ -646,28 +665,34 @@ fn debug_find_bad_connection() {
     let a0 = net1.crossover(&net2, &settings_0, 0.25, &mut StdRng::seed_from_u64(47_000));
     let cyc0 = find_cycle_helper(&a0);
     println!("iter=47, mutation_passes=0 cycle: {:?}", cyc0);
-    
+
     let mut settings_1 = settings.clone();
     settings_1.mutation_passes = 1;
     let a1 = net1.crossover(&net2, &settings_1, 0.25, &mut StdRng::seed_from_u64(47_000));
     let cyc1 = find_cycle_helper(&a1);
     println!("iter=47, mutation_passes=1 cycle: {:?}", cyc1);
-    
+
     let mut settings_2 = settings.clone();
     settings_2.mutation_passes = 2;
     let a2 = net1.crossover(&net2, &settings_2, 0.25, &mut StdRng::seed_from_u64(47_000));
     let cyc2 = find_cycle_helper(&a2);
     println!("iter=47, mutation_passes=2 cycle: {:?}", cyc2);
-    
+
     let a3 = net1.crossover(&net2, &settings, 0.25, &mut StdRng::seed_from_u64(47_000));
     let cyc3 = find_cycle_helper(&a3);
     println!("iter=47, mutation_passes=3 cycle: {:?}", cyc3);
-    
+
     // Also check net2.crossover(net1)
     let b0 = net2.crossover(&net1, &settings_0, 0.25, &mut StdRng::seed_from_u64(47_001));
-    println!("iter=47 b, mutation_passes=0 cycle: {:?}", find_cycle_helper(&b0));
+    println!(
+        "iter=47 b, mutation_passes=0 cycle: {:?}",
+        find_cycle_helper(&b0)
+    );
     let b3 = net2.crossover(&net1, &settings, 0.25, &mut StdRng::seed_from_u64(47_001));
-    println!("iter=47 b, mutation_passes=3 cycle: {:?}", find_cycle_helper(&b3));
+    println!(
+        "iter=47 b, mutation_passes=3 cycle: {:?}",
+        find_cycle_helper(&b3)
+    );
 }
 
 #[test]
@@ -688,30 +713,30 @@ fn debug_find_bad_connection2() {
 
     println!("net1 hidden len: {}", net1.hidden_layers.len());
     println!("net2 hidden len: {}", net2.hidden_layers.len());
-    
+
     // Now at iteration 47, the actual test does:
     // a = net1.crossover(&net2, ...)
     // b = net2.crossover(&net1, ...)
     // And the cycle shows up in 'a'
-    
+
     // Test 'a' with 0, 1, 2, 3 mutation passes, using the current rng state
     let settings_3 = settings.clone();
-    
+
     // We need separate snapshots of rng state for each test
     // But since we can't clone StdRng, let's just do it sequentially
-    
+
     // Do 0 mutations
     let mut s0 = settings.clone();
     s0.mutation_passes = 0;
     // Can't replay rng here... let's just do the actual crossover and check
-    
+
     // Let's just do the full mutation=3 crossover and check step-by-step
     // by doing the crossover merge first (mutation_passes=0)
     // and checking after each mutation pass
     let a = net1.crossover(&net2, &settings_3, 0.25, &mut rng);
     let cycle = find_cycle_helper(&a);
     println!("a (full crossover) cycle: {:?}", cycle);
-    
+
     let b = net2.crossover(&net1, &settings_3, 0.25, &mut rng);
     let cycle_b = find_cycle_helper(&b);
     println!("b (full crossover) cycle: {:?}", cycle_b);
@@ -721,16 +746,16 @@ fn debug_find_bad_connection2() {
 fn debug_add_connection_cycle() {
     // Try to find a case where add_connection adds a cyclic connection
     let settings_with_mut = ReproductionSettings::default();
-    
+
     for seed in 0..100u64 {
         let mut rng = StdRng::seed_from_u64(seed);
         let mut net1 = NeuralNetwork::<10, 10>::new(&mut rng);
         let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
-        
+
         for iter in 0..50usize {
             let a = net1.crossover(&net2, &settings_with_mut, 0.25, &mut rng);
             let b = net2.crossover(&net1, &settings_with_mut, 0.25, &mut rng);
-            
+
             // Double-check: is_connection_safe should return false for any existing cycle
             for i in 0..10usize {
                 let from = NeuronLocation::Input(i);
@@ -742,16 +767,23 @@ fn debug_add_connection_cycle() {
                     }
                 }
             }
-            
+
             let cycle_a = find_cycle_helper(&a);
             let cycle_b = find_cycle_helper(&b);
-            
+
             if cycle_a.is_some() || cycle_b.is_some() {
-                println!("seed={} iter={} cycle_a={:?} cycle_b={:?}", seed, iter, cycle_a, cycle_b);
+                println!(
+                    "seed={} iter={} cycle_a={:?} cycle_b={:?}",
+                    seed, iter, cycle_a, cycle_b
+                );
                 // Print the first cycle node's connections
                 if let Some(ref cycle) = cycle_a {
                     for &node in cycle {
-                        println!("  {:?} -> {:?}", node, a[node].outputs.keys().collect::<Vec<_>>());
+                        println!(
+                            "  {:?} -> {:?}",
+                            node,
+                            a[node].outputs.keys().collect::<Vec<_>>()
+                        );
                     }
                 }
                 // Check if is_connection_safe would detect the cycle
@@ -770,7 +802,7 @@ fn debug_add_connection_cycle() {
                 }
                 return;
             }
-            
+
             net1 = a;
             net2 = b;
         }
@@ -778,24 +810,24 @@ fn debug_add_connection_cycle() {
     println!("No cycles found!");
 }
 
-#[test] 
+#[test]
 fn debug_split_creates_cycle() {
     // Check whether split_connection creates cycles
     let settings_with_mut = ReproductionSettings::default();
-    
+
     for seed in 0..50u64 {
         let mut rng = StdRng::seed_from_u64(seed);
         let mut net1 = NeuralNetwork::<10, 10>::new(&mut rng);
         let mut net2 = NeuralNetwork::<10, 10>::new(&mut rng);
-        
+
         for iter in 0..50usize {
             let a = net1.crossover(&net2, &settings_with_mut, 0.25, &mut rng);
             let b = net2.crossover(&net1, &settings_with_mut, 0.25, &mut rng);
-            
+
             // Check if there's a cycle in the networks just from split operations
             // We'll do this by checking after each mutation pass manually
             // For now, just check that we can use is_connection_safe consistently
-            
+
             // Verify: for every existing edge u->v, is_connection_safe(v->u) should be false
             // (since u->v exists, v->u would create a 2-cycle)
             let mut found_issue = false;
@@ -820,7 +852,7 @@ fn debug_split_creates_cycle() {
                     if to.is_hidden() || to.is_input() {
                         // to->Hidden(i): to is not output (hidden or input)
                         // is_connection_safe checks:
-                        // - to.is_output() -> false if to is hidden/input ✓ 
+                        // - to.is_output() -> false if to is hidden/input ✓
                         //   Wait, "to" here is the "from" in the reverse connection!
                         let rev_conn = Connection { from: to, to: from };
                         // Check if connection.from.is_output() blocks it
@@ -828,7 +860,7 @@ fn debug_split_creates_cycle() {
                             // "from.is_output()" in is_connection_safe returns false
                             assert!(!a.is_connection_safe(rev_conn));
                         } else if from.is_input() {
-                            // "to.is_input()" in is_connection_safe returns false  
+                            // "to.is_input()" in is_connection_safe returns false
                             assert!(!a.is_connection_safe(rev_conn));
                         } else {
                             // Should be unsafe since there's already from->to
@@ -836,19 +868,27 @@ fn debug_split_creates_cycle() {
                                 println!("BUG: seed={} iter={}: is_connection_safe says {:?}->{:?} is SAFE but {:?}->{:?} exists!", 
                                     seed, iter, to, from, from, to);
                                 // Print the cycle path
-                                println!("  {:?} outputs: {:?}", from, a[from].outputs.keys().collect::<Vec<_>>());
-                                println!("  {:?} outputs: {:?}", to, a[to].outputs.keys().collect::<Vec<_>>());
+                                println!(
+                                    "  {:?} outputs: {:?}",
+                                    from,
+                                    a[from].outputs.keys().collect::<Vec<_>>()
+                                );
+                                println!(
+                                    "  {:?} outputs: {:?}",
+                                    to,
+                                    a[to].outputs.keys().collect::<Vec<_>>()
+                                );
                                 found_issue = true;
                             }
                         }
                     }
                 }
             }
-            
+
             if found_issue {
                 return;
             }
-            
+
             net1 = a;
             net2 = b;
         }
@@ -859,11 +899,14 @@ fn debug_split_creates_cycle() {
 #[test]
 fn debug_find_mutation_pass_cycle() {
     let settings = ReproductionSettings::default();
-    let mut settings0 = settings.clone(); settings0.mutation_passes = 0;
-    let mut settings1 = settings.clone(); settings1.mutation_passes = 1;
-    let mut settings2 = settings.clone(); settings2.mutation_passes = 2;
+    let mut settings0 = settings.clone();
+    settings0.mutation_passes = 0;
+    let mut settings1 = settings.clone();
+    settings1.mutation_passes = 1;
+    let mut settings2 = settings.clone();
+    settings2.mutation_passes = 2;
     let mut settings3 = settings.clone(); // mutation_passes = 3
-    
+
     'outer: for seed in 0..100u64 {
         let mut rng = StdRng::seed_from_u64(seed);
         let mut net1 = NeuralNetwork::<10, 10>::new(&mut rng);
@@ -873,7 +916,7 @@ fn debug_find_mutation_pass_cycle() {
             // We can't easily replay RNG, so just check the final result
             let a = net1.crossover(&net2, &settings3, 0.25, &mut rng);
             let b = net2.crossover(&net1, &settings3, 0.25, &mut rng);
-            
+
             // Verify that a network that claims to be acyclic is consistent with is_connection_safe
             // For a network with cycle C->D->E->C, is_connection_safe(E->C) should be false
             // But it might be TRUE (that's the bug)
@@ -882,23 +925,30 @@ fn debug_find_mutation_pass_cycle() {
                 // Find the specific edge in the cycle that is_connection_safe missed
                 for i in 0..cycle.len() {
                     let from = cycle[i];
-                    let to = cycle[(i+1) % cycle.len()];
+                    let to = cycle[(i + 1) % cycle.len()];
                     // This edge exists in the network
                     println!("  Edge {:?} -> {:?} exists. Checking if is_connection_safe would allow adding it again:", from, to);
                     // Check reverse edge
                     if !to.is_input() && !from.is_output() {
                         let safe = a.is_connection_safe(Connection { from: to, to: from });
-                        println!("    is_connection_safe({:?} -> {:?}) = {} (should be false for cycle)", to, from, safe);
+                        println!(
+                            "    is_connection_safe({:?} -> {:?}) = {} (should be false for cycle)",
+                            to, from, safe
+                        );
                     }
                 }
                 println!("  Full network connections:");
                 for i in 0..a.hidden_layers.len() {
                     let n = &a[NeuronLocation::Hidden(i)];
-                    println!("    Hidden({}) -> {:?}", i, n.outputs.keys().collect::<Vec<_>>());
+                    println!(
+                        "    Hidden({}) -> {:?}",
+                        i,
+                        n.outputs.keys().collect::<Vec<_>>()
+                    );
                 }
                 break 'outer;
             }
-            
+
             net1 = a;
             net2 = b;
         }
