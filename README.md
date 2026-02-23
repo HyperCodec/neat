@@ -1,102 +1,88 @@
 # neat
-[<img alt="github" src="https://img.shields.io/github/last-commit/inflectrix/neat" height="20">](https://github.com/inflectrix/neat)
+[<img alt="github" src="https://img.shields.io/github/last-commit/hypercodec/neat" height="20">](https://github.com/hypercodec/neat)
 [<img alt="crates.io" src="https://img.shields.io/crates/d/neat" height="20">](https://crates.io/crates/neat)
 [<img alt="docs.rs" src="https://img.shields.io/docsrs/neat" height="20">](https://docs.rs/neat)
 
 Implementation of the NEAT algorithm using `genetic-rs`.
 
 ### Features
-- rayon - Uses parallelization on the `NeuralNetwork` struct and adds the `rayon` feature to the `genetic-rs` re-export.
-- serde - Adds the NNTSerde struct and allows for serialization of `NeuralNetworkTopology`
-- crossover - Implements the `CrossoverReproduction` trait on `NeuralNetworkTopology` and adds the `crossover` feature to the `genetic-rs` re-export.
+- serde - Implements `Serialize` and `Deserialize` on most of the types in this crate.
 
-*Do you like this repo and want to support it? If so, leave a ⭐*
+*Do you like this crate and want to support it? If so, leave a ⭐*
 
-### How To Use
-When working with this crate, you'll want to use the `NeuralNetworkTopology` struct in your agent's DNA and
-the use `NeuralNetwork::from` when you finally want to test its performance. The `genetic-rs` crate is also re-exported with the rest of this crate.
-
-Here's an example of how one might use this crate:
+# How To Use
+The `NeuralNetwork<I, O>` struct is the main type exported by this crate. The `I` is the number of input neurons, and `O` is the number of output neurons. It implements `GenerateRandom`, `RandomlyMutable`, `Mitosis`, and `Crossover`, with a lot of customizability. This means that you can use it standalone as your organism's entire genome:
 ```rust
 use neat::*;
 
-#[derive(Clone, RandomlyMutable, DivisionReproduction)]
-struct MyAgentDNA {
-    network: NeuralNetworkTopology<1, 2>,
-}
+fn fitness(net: &NeuralNetwork<5, 6>) -> f32 {
+    // ideally you'd test multiple times for consistency,
+    // but this is just a simple example.
+    // it's also generally good practice to normalize your inputs between -1..1,
+    // but NEAT is usually flexible enough to still work anyways
+    let inputs = [1.0, 2.0, 3.0, 4.0, 5.0];
+    let outputs = net.predict(inputs);
 
-impl GenerateRandom for MyAgentDNA {
-    fn gen_random(rng: &mut impl rand::Rng) -> Self {
-        Self {
-            network: NeuralNetworkTopology::new(0.01, 3, rng),
-        }
-    }
-}
-
-struct MyAgent {
-    network: NeuralNetwork<1, 2>,
-    // ... other state
-}
-
-impl From<&MyAgentDNA> for MyAgent {
-    fn from(value: &MyAgentDNA) -> Self {
-        Self {
-            network: NeuralNetwork::from(&value.network),
-        }
-    }
-}
-
-fn fitness(dna: &MyAgentDNA) -> f32 {
-    // agent will simply try to predict whether a number is greater than 0.5
-    let mut agent = MyAgent::from(dna);
-    let mut rng = rand::thread_rng();
-    let mut fitness = 0;
-
-    // use repeated tests to avoid situational bias and some local maximums, overall providing more accurate score
-    for _ in 0..10 {
-        let n = rng.gen::<f32>();
-        let above = n > 0.5;
-
-        let res = agent.network.predict([n]);
-        let resi = res.iter().max_index();
-
-        if resi == 0 ^ above {
-            // agent did not guess correctly, punish slightly (too much will hinder exploration)
-            fitness -= 0.5;
-
-            continue;
-        }
-
-        // agent guessed correctly, they become more fit.
-        fitness += 3.;
-    }
-
-    fitness
+    // simple fitness: sum of outputs
+    // you should replace this with a real fitness test
+    outputs.iter().sum()
 }
 
 fn main() {
-    let mut rng = rand::thread_rng();
-
+    let mut rng = rand::rng();
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, 100),
-        fitness,
-        division_pruning_nextgen,
+        FitnessEliminator::new_without_observer(fitness),
+        CrossoverRepopulator::new(0.25, ReproductionSettings::default()),
     );
 
-    // simulate 100 generations
-    for _ in 0..100 {
-        sim.next_generation();
-    }
-
-    // display fitness results
-    let fits: Vec<_> = sim.entities
-        .iter()
-        .map(fitness)
-        .collect();
-
-    dbg!(&fits, fits.iter().max());
+    sim.perform_generations(100);
 }
 ```
+
+Or just a part of a more complex genome:
+```rust,ignore
+use neat::*;
+
+#[derive(Clone, Debug)]
+struct PhysicalStats {
+    strength: f32,
+    speed: f32,
+    // ...
+}
+
+// ... implement `RandomlyMutable`, `GenerateRandom`, `Crossover`, `Default`, etc.
+
+#[derive(Clone, Debug, GenerateRandom, RandomlyMutable, Mitosis, Crossover)]
+#[randmut(create_context(name = MyGenomeMutate, derive(Default, Clone, Debug)))]
+#[mitosis(create_context(name = MyGenomeReproduce, derive(Default, Clone, Debug)))]
+#[crossover(with_context = MyGenomeReproduce)]
+struct MyGenome {
+    brain: NeuralNetwork<4, 2>,
+    stats: PhysicalStats,
+}
+
+fn fitness(genome: &MyGenome) -> f32 {
+    let inputs = [1.0, 2.0, 3.0, 4.0];
+    let outputs = genome.brain.predict(inputs);
+    // fitness uses both brain output and stats
+    outputs.iter().sum::<f32>() + genome.stats.strength + genome.stats.speed
+}
+
+// main is the exact same as before
+fn main() {
+    let mut rng = rand::rng();
+    let mut sim = GeneticSim::new(
+        Vec::gen_random(&mut rng, 100),
+        FitnessEliminator::new_without_observer(fitness),
+        CrossoverRepopulator::new(0.25, MyGenomeReproduce::default()),
+    );
+
+    sim.perform_generations(100);
+}
+```
+
+If you want more in-depth examples, look at the [examples](https://github.com/HyperCodec/neat/tree/main/examples). You can also check out the [genetic-rs docs](https://docs.rs/genetic_rs) to see what other options you have to customize your genetic simulation.
 
 ### License
 This crate falls under the `MIT` license

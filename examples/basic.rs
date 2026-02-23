@@ -1,130 +1,77 @@
-//! A basic example of NEAT with this crate. Enable the `crossover` feature for it to use crossover reproduction
-
 use neat::*;
-use rand::prelude::*;
 
-#[derive(PartialEq, Clone, Debug, DivisionReproduction, RandomlyMutable)]
-#[cfg_attr(feature = "crossover", derive(CrossoverReproduction))]
-struct AgentDNA {
-    network: NeuralNetworkTopology<2, 4>,
-}
+// approximate the to_degrees function, which should be pretty
+// hard for a traditional network to learn since it's not really close to -1..1 mapping.
+fn fitness(net: &NeuralNetwork<1, 1>) -> f32 {
+    let mut rng = rand::rng();
+    let mut total_fitness = 0.0;
 
-impl Prunable for AgentDNA {}
+    // it's good practice to test on multiple inputs to get a more accurate fitness score
+    for _ in 0..100 {
+        let input = rng.random_range(-10.0..10.0);
+        let output = net.predict([input])[0];
+        let expected_output = input.to_degrees();
 
-impl GenerateRandom for AgentDNA {
-    fn gen_random(rng: &mut impl rand::Rng) -> Self {
-        Self {
-            network: NeuralNetworkTopology::new(0.01, 3, rng),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Agent {
-    network: NeuralNetwork<2, 4>,
-}
-
-impl From<&AgentDNA> for Agent {
-    fn from(value: &AgentDNA) -> Self {
-        Self {
-            network: (&value.network).into(),
-        }
-    }
-}
-
-fn fitness(dna: &AgentDNA) -> f32 {
-    let agent = Agent::from(dna);
-
-    let mut fitness = 0.;
-    let mut rng = rand::thread_rng();
-
-    for _ in 0..10 {
-        // 10 games
-
-        // set up game
-        let mut agent_pos: (i32, i32) = (rng.gen_range(0..10), rng.gen_range(0..10));
-        let mut food_pos: (i32, i32) = (rng.gen_range(0..10), rng.gen_range(0..10));
-
-        while food_pos == agent_pos {
-            food_pos = (rng.gen_range(0..10), rng.gen_range(0..10));
-        }
-
-        let mut step = 0;
-
-        loop {
-            // perform actions in game
-            let action = agent.network.predict([
-                (food_pos.0 - agent_pos.0) as f32,
-                (food_pos.1 - agent_pos.1) as f32,
-            ]);
-            let action = action.iter().max_index();
-
-            match action {
-                0 => agent_pos.0 += 1,
-                1 => agent_pos.0 -= 1,
-                2 => agent_pos.1 += 1,
-                _ => agent_pos.1 -= 1,
-            }
-
-            step += 1;
-
-            if agent_pos == food_pos {
-                fitness += 10.;
-                break; // new game
-            } else {
-                // lose fitness for being slow and far away
-                fitness -=
-                    (food_pos.0 - agent_pos.0 + food_pos.1 - agent_pos.1).abs() as f32 * 0.001;
-            }
-
-            // 50 steps per game
-            if step == 50 {
-                break;
-            }
-        }
+        // basically just using negative error as fitness.
+        // percentage error doesn't work as well here since
+        // expected_output can be either very small or very large in magnitude.
+        total_fitness -= (output - expected_output).abs();
     }
 
-    fitness
+    total_fitness
 }
 
 fn main() {
-    #[cfg(not(feature = "rayon"))]
-    let mut rng = rand::thread_rng();
+    #[cfg(debug_assertions)]
+    println!("You're running on the debug profile, which is not optimized. Consider running with --release for significantly better performance.");
+
+    let mut rng = rand::rng();
 
     let mut sim = GeneticSim::new(
-        #[cfg(not(feature = "rayon"))]
-        Vec::gen_random(&mut rng, 100),
-        #[cfg(feature = "rayon")]
-        Vec::gen_random(100),
-        fitness,
-        #[cfg(not(feature = "crossover"))]
-        division_pruning_nextgen,
-        #[cfg(feature = "crossover")]
-        crossover_pruning_nextgen,
+        Vec::gen_random(&mut rng, 250),
+        FitnessEliminator::new_without_observer(fitness),
+        CrossoverRepopulator::new(0.25, ReproductionSettings::default()),
     );
 
-    for _ in 0..100 {
+    for i in 0..=150 {
         sim.next_generation();
+
+        // sample a genome to print its fitness.
+        // this value should approach 0 as the generations go on, since the fitness is negative error.
+        // with the way CrossoverRepopulator (and all builtin repopulators) works internally, the parent genomes
+        // (i.e. prev generation champs) are more likely to be at the start of the genomes vector.
+        let sample = &sim.genomes[0];
+        let fit = fitness(sample);
+        println!("Gen {i} sample fitness: {fit}");
     }
+    println!("Training complete, now you can test the network!");
 
-    #[cfg(not(feature = "serde"))]
-    let mut fits: Vec<_> = sim.genomes.iter().map(fitness).collect();
+    let net = &sim.genomes[0];
+    println!("Network in use: {:#?}", net);
 
-    #[cfg(feature = "serde")]
-    let mut fits: Vec<_> = sim.genomes.iter().map(|e| (e, fitness(e))).collect();
+    loop {
+        let mut input_text = String::new();
+        println!("Enter a number to convert to degrees (or 'exit' to quit): ");
+        std::io::stdin().read_line(&mut input_text).unwrap();
+        let input_text = input_text.trim();
+        if input_text.eq_ignore_ascii_case("exit") {
+            break;
+        }
+        let input: f32 = match input_text.parse() {
+            Ok(num) => num,
+            Err(_) => {
+                println!("Invalid input, please enter a valid number.");
+                continue;
+            }
+        };
 
-    #[cfg(not(feature = "serde"))]
-    fits.sort_by(|a, b| a.partial_cmp(&b).unwrap());
-
-    #[cfg(feature = "serde")]
-    fits.sort_by(|(_, a), (_, b)| a.partial_cmp(&b).unwrap());
-
-    dbg!(&fits);
-
-    #[cfg(feature = "serde")]
-    {
-        let intermediate = NNTSerde::from(&fits[0].0.network);
-        let serialized = serde_json::to_string(&intermediate).unwrap();
-        println!("{}", serialized);
+        let output = net.predict([input])[0];
+        let expected_output = input.to_degrees();
+        println!(
+            "Network output: {}, Expected output: {}, Error: {}",
+            output,
+            expected_output,
+            (output - expected_output).abs()
+        );
     }
 }

@@ -1,7 +1,13 @@
+/// Contains some builtin activation functions ([`sigmoid`], [`relu`], etc.)
+pub mod builtin;
+
+use bitflags::bitflags;
+use builtin::*;
+
+use genetic_rs::prelude::{rand, RngExt};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use bitflags::bitflags;
 use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
@@ -15,11 +21,11 @@ use crate::NeuronLocation;
 #[macro_export]
 macro_rules! activation_fn {
     ($F: path) => {
-        ActivationFn::new(Arc::new($F), ActivationScope::default(), stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $crate::activation::NeuronScope::default(), stringify!($F))
     };
 
     ($F: path, $S: expr) => {
-        ActivationFn::new(Arc::new($F), $S, stringify!($F).into())
+        $crate::activation::ActivationFn::new(std::sync::Arc::new($F), $S, stringify!($F))
     };
 
     {$($F: path),*} => {
@@ -51,13 +57,13 @@ pub fn batch_register_activation(acts: impl IntoIterator<Item = ActivationFn>) {
 /// A registry of the different possible activation functions.
 pub struct ActivationRegistry {
     /// The currently-registered activation functions.
-    pub fns: HashMap<String, ActivationFn>,
+    pub fns: HashMap<&'static str, ActivationFn>,
 }
 
 impl ActivationRegistry {
     /// Registers an activation function.
     pub fn register(&mut self, activation: ActivationFn) {
-        self.fns.insert(activation.name.clone(), activation);
+        self.fns.insert(activation.name, activation);
     }
 
     /// Registers multiple activation functions at once.
@@ -67,18 +73,48 @@ impl ActivationRegistry {
         }
     }
 
-    /// Gets a Vec of all the activation functions registered. Unless you need an owned value, use [fns][ActivationRegistry::fns].values() instead.
+    /// Gets a Vec of all the activation functions registered. Use [fns][ActivationRegistry::fns] if you only need an iterator.
     pub fn activations(&self) -> Vec<ActivationFn> {
         self.fns.values().cloned().collect()
     }
 
     /// Gets all activation functions that are valid for a scope.
-    pub fn activations_in_scope(&self, scope: ActivationScope) -> Vec<ActivationFn> {
+    pub fn activations_in_scope(&self, scope: NeuronScope) -> Vec<ActivationFn> {
+        if scope == NeuronScope::NONE {
+            return Vec::new();
+        }
+
         let acts = self.activations();
 
         acts.into_iter()
-            .filter(|a| a.scope != ActivationScope::NONE && a.scope.contains(scope))
+            .filter(|a| a.scope.contains(scope))
             .collect()
+    }
+
+    /// Clears all existing values in the activation registry.
+    pub fn clear(&mut self) {
+        self.fns.clear();
+    }
+
+    /// Fetches a random activation fn that applies to the provided scope.
+    ///
+    /// # Panics
+    ///
+    /// Panics if there are no activation functions registered for the given scope.
+    pub fn random_activation_in_scope(
+        &self,
+        scope: NeuronScope,
+        rng: &mut impl rand::Rng,
+    ) -> ActivationFn {
+        let activations = self.activations_in_scope(scope);
+
+        assert!(
+            !activations.is_empty(),
+            "no activation functions registered for scope {:?}",
+            scope
+        );
+
+        activations[rng.random_range(0..activations.len())].clone()
     }
 }
 
@@ -88,48 +124,15 @@ impl Default for ActivationRegistry {
             fns: HashMap::new(),
         };
 
+        // TODO add a way to disable this
         s.batch_register(activation_fn! {
-            sigmoid => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            relu => ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            linear_activation => ActivationScope::INPUT | ActivationScope::HIDDEN | ActivationScope::OUTPUT,
-            f32::tanh => ActivationScope::HIDDEN | ActivationScope::OUTPUT
+            sigmoid => NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            relu => NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            linear_activation => NeuronScope::INPUT | NeuronScope::HIDDEN | NeuronScope::OUTPUT,
+            f32::tanh => NeuronScope::HIDDEN | NeuronScope::OUTPUT
         });
 
         s
-    }
-}
-
-bitflags! {
-    /// Specifies where an activation function can occur
-    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-    pub struct ActivationScope: u8 {
-        /// Whether the activation can be applied to the input layer.
-        const INPUT = 0b001;
-
-        /// Whether the activation can be applied to the hidden layer.
-        const HIDDEN = 0b010;
-
-        /// Whether the activation can be applied to the output layer.
-        const OUTPUT = 0b100;
-
-        /// The activation function will not be randomly placed anywhere
-        const NONE = 0b000;
-    }
-}
-
-impl Default for ActivationScope {
-    fn default() -> Self {
-        Self::HIDDEN
-    }
-}
-
-impl From<&NeuronLocation> for ActivationScope {
-    fn from(value: &NeuronLocation) -> Self {
-        match value {
-            NeuronLocation::Input(_) => Self::INPUT,
-            NeuronLocation::Hidden(_) => Self::HIDDEN,
-            NeuronLocation::Output(_) => Self::OUTPUT,
-        }
     }
 }
 
@@ -152,16 +155,18 @@ pub struct ActivationFn {
     pub func: Arc<dyn Activation + Send + Sync>,
 
     /// The scope defining where the activation function can appear.
-    pub scope: ActivationScope,
-    pub(crate) name: String,
+    pub scope: NeuronScope,
+
+    /// The name of the activation function, used for debugging and serialization.
+    pub name: &'static str,
 }
 
 impl ActivationFn {
     /// Creates a new ActivationFn object.
     pub fn new(
         func: Arc<dyn Activation + Send + Sync>,
-        scope: ActivationScope,
-        name: String,
+        scope: NeuronScope,
+        name: &'static str,
     ) -> Self {
         Self { func, name, scope }
     }
@@ -169,7 +174,7 @@ impl ActivationFn {
 
 impl fmt::Debug for ActivationFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{}", self.name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -182,7 +187,7 @@ impl PartialEq for ActivationFn {
 #[cfg(feature = "serde")]
 impl Serialize for ActivationFn {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.name)
+        serializer.serialize_str(self.name)
     }
 }
 
@@ -196,27 +201,44 @@ impl<'a> Deserialize<'a> for ActivationFn {
 
         let reg = ACTIVATION_REGISTRY.read().unwrap();
 
-        let f = reg.fns.get(&name);
+        let f = reg.fns.get(name.as_str()).ok_or_else(|| {
+            serde::de::Error::custom(format!("Activation function {name} not found"))
+        })?;
 
-        if f.is_none() {
-            panic!("Activation function {name} not found");
-        }
-
-        Ok(f.unwrap().clone())
+        Ok(f.clone())
     }
 }
 
-/// The sigmoid activation function.
-pub fn sigmoid(n: f32) -> f32 {
-    1. / (1. + std::f32::consts::E.powf(-n))
+bitflags! {
+    /// Specifies where an activation function can occur
+    #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+    pub struct NeuronScope: u8 {
+        /// Whether the activation can be applied to the input layer.
+        const INPUT = 0b001;
+
+        /// Whether the activation can be applied to the hidden layer.
+        const HIDDEN = 0b010;
+
+        /// Whether the activation can be applied to the output layer.
+        const OUTPUT = 0b100;
+
+        /// The activation function will not be randomly placed anywhere
+        const NONE = 0b000;
+    }
 }
 
-/// The ReLU activation function.
-pub fn relu(n: f32) -> f32 {
-    n.max(0.)
+impl Default for NeuronScope {
+    fn default() -> Self {
+        Self::HIDDEN
+    }
 }
 
-/// Activation function that does nothing.
-pub fn linear_activation(n: f32) -> f32 {
-    n
+impl<L: AsRef<NeuronLocation>> From<L> for NeuronScope {
+    fn from(value: L) -> Self {
+        match value.as_ref() {
+            NeuronLocation::Input(_) => Self::INPUT,
+            NeuronLocation::Hidden(_) => Self::HIDDEN,
+            NeuronLocation::Output(_) => Self::OUTPUT,
+        }
+    }
 }
