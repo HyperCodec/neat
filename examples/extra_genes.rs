@@ -170,8 +170,8 @@ impl Crossover for PhysicalStats {
 
 /// A complete organism genome containing both neural network and physical traits
 #[derive(Clone, Debug, PartialEq, GenerateRandom, RandomlyMutable, Crossover)]
-#[randmut(create_context = OrganismCtx)]
-#[crossover(with_context = OrganismCtx)]
+#[randmut(create_context(name = OrganismMutateCtx, derive(Debug, Clone, Default)))]
+#[crossover(create_context(name = OrganismReprCtx, derive(Debug, Clone, Default)))]
 struct OrganismGenome {
     brain: NeuralNetwork<8, 2>,
     stats: PhysicalStats,
@@ -356,7 +356,7 @@ fn main() {
     let mut sim = GeneticSim::new(
         Vec::gen_random(&mut rng, POPULATION_SIZE),
         FitnessEliminator::new_without_observer(evaluate_organism),
-        CrossoverRepopulator::new(MUTATION_RATE, OrganismCtx::default()),
+        CrossoverRepopulator::new(MUTATION_RATE, OrganismReprCtx::default()),
     );
 
     for generation in 0..=HIGHEST_GENERATION {
