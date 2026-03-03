@@ -846,9 +846,6 @@ impl<const I: usize, const O: usize> IndexMut<NeuronLocation> for NeuralNetwork<
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct MutationSettings {
-    /// The chance of each mutation type to occur.
-    pub mutation_rate: f32,
-
     /// The maximum amount that the weights will be mutated by in one mutation pass.
     pub weight_mutation_amount: f32,
 
@@ -873,7 +870,6 @@ pub struct MutationSettings {
 impl Default for MutationSettings {
     fn default() -> Self {
         Self {
-            mutation_rate: 0.01,
             weight_mutation_amount: 0.5,
             bias_mutation_amount: 0.5,
             max_add_retries: 10,
