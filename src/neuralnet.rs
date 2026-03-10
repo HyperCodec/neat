@@ -811,6 +811,35 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
             *w += amount;
         });
     }
+
+    /// Gets a set of all connections in the neural network.
+    /// Used for things like calculating divergence between neural networks during speciation.
+    pub fn edges_set(&self) -> HashSet<Connection> {
+        let mut edges = HashSet::new();
+
+        for (i, n) in self.input_layer.iter().enumerate() {
+            let from = NeuronLocation::Input(i);
+            for (&to, _) in &n.outputs {
+                edges.insert(Connection { from, to });
+            }
+        }
+
+        for (i, n) in self.hidden_layers.iter().enumerate() {
+            let from = NeuronLocation::Hidden(i);
+            for (&to, _) in &n.outputs {
+                edges.insert(Connection { from, to });
+            }
+        }
+
+        for (i, n) in self.output_layer.iter().enumerate() {
+            let from = NeuronLocation::Output(i);
+            for (&to, _) in &n.outputs {
+                edges.insert(Connection { from, to });
+            }
+        }
+
+        edges
+    }
 }
 
 impl<const I: usize, const O: usize> Index<NeuronLocation> for NeuralNetwork<I, O> {
@@ -1039,6 +1068,51 @@ fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> b
         NeuronLocation::Input(_) => false,
         NeuronLocation::Hidden(i) => i < hidden_len,
         NeuronLocation::Output(i) => i < output_len,
+    }
+}
+
+/// The weights for calculating divergence between two neural networks.
+pub struct DivergenceWeights {
+    /// The weight for the symmetric difference of edges
+    edge: f32,
+
+    /// The weight for the difference in the number of hidden neurons.
+    node: f32,
+}
+
+impl DivergenceWeights {
+    /// Creates a new [`DivergenceWeights`] with the specified edge and node weights.
+    /// Arguments must add to 1.0 and be between 0.0 and 1.0 inclusive.
+    pub fn new(edge: f32, node: f32) -> Self {
+        assert!(
+            (edge + node - 1.0).abs() < f32::EPSILON,
+            "edge and node weights must add to 1.0"
+        );
+        assert!(
+            (0.0..=1.0).contains(&edge) && (0.0..=1.0).contains(&node),
+            "edge and node weights must be between 0.0 and 1.0 inclusive"
+        );
+
+        Self { edge, node }
+    }
+}
+
+impl<const I: usize, const O: usize> Speciated for NeuralNetwork<I, O> {
+    type Context = DivergenceWeights;
+
+    fn divergence(&self, other: &Self, ctx: &Self::Context) -> f32 {
+        let self_edges = self.edges_set();
+        let other_edges = other.edges_set();
+        let total_edges = self_edges.union(&other_edges).count();
+
+        let edge_diff = self_edges.symmetric_difference(&other_edges).count() as f32;
+
+        let edge_term = ctx.edge * edge_diff / total_edges.max(1) as f32;
+
+        let node_diff = self.hidden_layers.len().abs_diff(other.hidden_layers.len()) as f32;
+        let node_term = ctx.node * node_diff / self.hidden_layers.len().max(other.hidden_layers.len()).max(1) as f32;
+
+        edge_term + node_term
     }
 }
 
