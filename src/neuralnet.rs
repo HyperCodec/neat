@@ -1097,9 +1097,16 @@ impl DivergenceWeights {
     }
 }
 
+impl Default for DivergenceWeights {
+    fn default() -> Self {
+        Self { edge: 0.5, node: 0.5 }
+    }
+}
+
 impl<const I: usize, const O: usize> Speciated for NeuralNetwork<I, O> {
     type Context = DivergenceWeights;
 
+    /// Divergence based on weighted inverse Jaccard similarity.
     fn divergence(&self, other: &Self, ctx: &Self::Context) -> f32 {
         let self_edges = self.edges_set();
         let other_edges = other.edges_set();
