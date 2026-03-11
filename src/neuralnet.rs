@@ -819,21 +819,21 @@ impl<const I: usize, const O: usize> NeuralNetwork<I, O> {
 
         for (i, n) in self.input_layer.iter().enumerate() {
             let from = NeuronLocation::Input(i);
-            for (&to, _) in &n.outputs {
+            for &to in n.outputs.keys() {
                 edges.insert(Connection { from, to });
             }
         }
 
         for (i, n) in self.hidden_layers.iter().enumerate() {
             let from = NeuronLocation::Hidden(i);
-            for (&to, _) in &n.outputs {
+            for &to in n.outputs.keys() {
                 edges.insert(Connection { from, to });
             }
         }
 
         for (i, n) in self.output_layer.iter().enumerate() {
             let from = NeuronLocation::Output(i);
-            for (&to, _) in &n.outputs {
+            for &to in n.outputs.keys() {
                 edges.insert(Connection { from, to });
             }
         }
