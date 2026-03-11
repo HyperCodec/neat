@@ -960,6 +960,7 @@ impl<const I: usize, const O: usize> RandomlyMutable for NeuralNetwork<I, O> {
 }
 
 /// The settings used for [`NeuralNetwork`] reproduction.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReproductionSettings {
     /// The mutation settings to use during reproduction.
@@ -1072,12 +1073,25 @@ fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> b
 }
 
 /// The weights for calculating divergence between two neural networks.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct DivergenceWeights {
     /// The weight for the symmetric difference of edges
     edge: f32,
 
     /// The weight for the difference in the number of hidden neurons.
     node: f32,
+}
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for DivergenceWeights {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (edge, node) = <(f32, f32)>::deserialize(deserializer)?;
+        Ok(DivergenceWeights::new(edge, node))
+    }
 }
 
 impl DivergenceWeights {
