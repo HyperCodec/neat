@@ -1083,6 +1083,9 @@ pub struct DivergenceWeights {
 impl DivergenceWeights {
     /// Creates a new [`DivergenceWeights`] with the specified edge and node weights.
     /// Arguments must add to 1.0 and be between 0.0 and 1.0 inclusive.
+    /// Edge weight is the weight for the symmetric difference of edges, and node weight is
+    /// the weight for the difference in the number of hidden neurons.
+    /// Default recommended values are edge = 0.7 and node = 0.3, but feel free to experiment with different values.
     pub fn new(edge: f32, node: f32) -> Self {
         assert!(
             (edge + node - 1.0).abs() < f32::EPSILON,
