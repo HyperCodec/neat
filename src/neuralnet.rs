@@ -1102,7 +1102,10 @@ impl DivergenceWeights {
 
 impl Default for DivergenceWeights {
     fn default() -> Self {
-        Self { edge: 0.7, node: 0.3 }
+        Self {
+            edge: 0.7,
+            node: 0.3,
+        }
     }
 }
 
@@ -1120,7 +1123,12 @@ impl<const I: usize, const O: usize> Speciated for NeuralNetwork<I, O> {
         let edge_term = ctx.edge * edge_diff / total_edges.max(1) as f32;
 
         let node_diff = self.hidden_layers.len().abs_diff(other.hidden_layers.len()) as f32;
-        let node_term = ctx.node * node_diff / self.hidden_layers.len().max(other.hidden_layers.len()).max(1) as f32;
+        let node_term = ctx.node * node_diff
+            / self
+                .hidden_layers
+                .len()
+                .max(other.hidden_layers.len())
+                .max(1) as f32;
 
         edge_term + node_term
     }
