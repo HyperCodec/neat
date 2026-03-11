@@ -125,9 +125,9 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "genetic-rs"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb54b5cf12753eb0217391e15f8ae0eb388ef74acf9c145c8e826ffd168813e3"
+checksum = "91ff84315b42aa07d69d5d0544403f4d56791824b4e0e10420ca6c3fcaff193d"
 dependencies = [
  "genetic-rs-common",
  "genetic-rs-macros",
@@ -135,9 +135,9 @@ dependencies = [
 
 [[package]]
 name = "genetic-rs-common"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d997aa6eb69d42e76d6fcb959cb33a0fc5baf443075489efe5f31a1f8c43ed5"
+checksum = "93606635ba093802487db62ca9b3ffd9762946fd2fa2fc1461fc6f1342f8a6cd"
 dependencies = [
  "itertools",
  "rand",
@@ -146,9 +146,9 @@ dependencies = [
 
 [[package]]
 name = "genetic-rs-macros"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee1b5fffd72f5cc860492bf736fedac9f8bdd5b1ffd84d90b21943c42fd31559"
+checksum = "909a36b32f9d8361c56ef2a76dc905484698e32f4fe6ed55c36dde182be81f84"
 dependencies = [
  "darling",
  "genetic-rs-common",
