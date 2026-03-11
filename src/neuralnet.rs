@@ -1116,11 +1116,11 @@ impl<const I: usize, const O: usize> Speciated for NeuralNetwork<I, O> {
     fn divergence(&self, other: &Self, ctx: &Self::Context) -> f32 {
         let self_edges = self.edges_set();
         let other_edges = other.edges_set();
-        let total_edges = self_edges.union(&other_edges).count();
+        let total_edges = self_edges.union(&other_edges).count() as f32;
 
         let edge_diff = self_edges.symmetric_difference(&other_edges).count() as f32;
 
-        let edge_term = ctx.edge * edge_diff / total_edges.max(1) as f32;
+        let edge_term = ctx.edge * edge_diff / total_edges.max(1.0);
 
         let node_diff = self.hidden_layers.len().abs_diff(other.hidden_layers.len()) as f32;
         let node_term = ctx.node * node_diff
