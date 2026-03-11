@@ -1099,7 +1099,7 @@ impl DivergenceWeights {
 
 impl Default for DivergenceWeights {
     fn default() -> Self {
-        Self { edge: 0.5, node: 0.5 }
+        Self { edge: 0.7, node: 0.3 }
     }
 }
 
