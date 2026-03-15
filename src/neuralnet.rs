@@ -1096,10 +1096,9 @@ impl<'de> Deserialize<'de> for DivergenceWeights {
 
 impl DivergenceWeights {
     /// Creates a new [`DivergenceWeights`] with the specified edge and node weights.
-    /// Arguments must add to 1.0 and be between 0.0 and 1.0 inclusive.
     /// Edge weight is the weight for the symmetric difference of edges, and node weight is
     /// the weight for the difference in the number of hidden neurons.
-    /// Default recommended values are edge = 0.7 and node = 0.3, but feel free to experiment with different values.
+    /// Default values are edge = 0.7 and node = 0.3, but feel free to experiment with different values.
     pub fn new(edge: f32, node: f32) -> Self {
         assert!(
             (edge + node - 1.0).abs() < f32::EPSILON,
@@ -1130,19 +1129,19 @@ impl<const I: usize, const O: usize> Speciated for NeuralNetwork<I, O> {
     fn divergence(&self, other: &Self, ctx: &Self::Context) -> f32 {
         let self_edges = self.edges_set();
         let other_edges = other.edges_set();
-        let total_edges = self_edges.union(&other_edges).count() as f32;
+        // let total_edges = self_edges.union(&other_edges).count() as f32;
 
         let edge_diff = self_edges.symmetric_difference(&other_edges).count() as f32;
 
-        let edge_term = ctx.edge * edge_diff / total_edges.max(1.0);
+        let edge_term = ctx.edge * edge_diff; // / total_edges.max(1.0);
 
         let node_diff = self.hidden_layers.len().abs_diff(other.hidden_layers.len()) as f32;
-        let node_term = ctx.node * node_diff
-            / self
-                .hidden_layers
-                .len()
-                .max(other.hidden_layers.len())
-                .max(1) as f32;
+        let node_term = ctx.node * node_diff;
+        // / self
+        //     .hidden_layers
+        //     .len()
+        //     .max(other.hidden_layers.len())
+        //     .max(1) as f32;
 
         edge_term + node_term
     }
