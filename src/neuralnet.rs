@@ -1074,50 +1074,20 @@ fn output_exists(loc: NeuronLocation, hidden_len: usize, output_len: usize) -> b
 
 /// The weights for calculating divergence between two neural networks.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DivergenceWeights {
     /// The weight for the symmetric difference of edges
-    edge: f32,
+    pub edge: f32,
 
     /// The weight for the difference in the number of hidden neurons.
-    node: f32,
-}
-
-#[cfg(feature = "serde")]
-impl<'de> Deserialize<'de> for DivergenceWeights {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let (edge, node) = <(f32, f32)>::deserialize(deserializer)?;
-        Ok(DivergenceWeights::new(edge, node))
-    }
-}
-
-impl DivergenceWeights {
-    /// Creates a new [`DivergenceWeights`] with the specified edge and node weights.
-    /// Edge weight is the weight for the symmetric difference of edges, and node weight is
-    /// the weight for the difference in the number of hidden neurons.
-    /// Default values are edge = 0.7 and node = 0.3, but feel free to experiment with different values.
-    pub fn new(edge: f32, node: f32) -> Self {
-        assert!(
-            (edge + node - 1.0).abs() < f32::EPSILON,
-            "edge and node weights must add to 1.0"
-        );
-        assert!(
-            (0.0..=1.0).contains(&edge) && (0.0..=1.0).contains(&node),
-            "edge and node weights must be between 0.0 and 1.0 inclusive"
-        );
-
-        Self { edge, node }
-    }
+    pub node: f32,
 }
 
 impl Default for DivergenceWeights {
     fn default() -> Self {
         Self {
-            edge: 0.7,
-            node: 0.3,
+            edge: 1.0,
+            node: 1.0,
         }
     }
 }
